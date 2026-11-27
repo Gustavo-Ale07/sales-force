@@ -1,5 +1,5 @@
 import type { DraftRecord } from "@salesforce/mobile-db";
-import { documentFreightLabels, documentStatusLabels, documentIpiPercent, orderDocumentConditions, renderOrderHtml, toOrderDocument, type OrderDocumentModel } from "@salesforce/domain";
+import { documentFreightLabels, documentStatusLabels, documentIpiPercent, orderDocumentConditions, renderOrderHtml, resolveDocumentCarrier, toOrderDocument, type OrderDocumentCustomerRegistry, type OrderDocumentModel } from "@salesforce/domain";
 import { previewDraft, type EditorLine } from "../data/order-draft";
 import { isCustomerUnavailable, isProductBlocked, sendPhaseOf } from "./sales-status";
 import { saleValue } from "./sales";
@@ -55,6 +55,18 @@ export interface OrderPdfExtras {
   readonly kind?: "order" | "quote";
   /** Moment of issue printed under the document, like the site; the caller's clock. */
   readonly issuedAt?: string;
+  /** Carriers known on the device (last stored list): resolves the order's carrier code to a name. */
+  readonly carriers?: readonly { readonly code: number; readonly name: string }[];
+  /** Customer's default carrier name (Sankhya), used when the order has none. */
+  readonly customerDefaultCarrierName?: string | null;
+  /** Registry data of the customer (mirror or the one saved offline in the Force) for the seller to double-check; absent = dashes. */
+  readonly customerRegistry?: OrderDocumentCustomerRegistry;
+}
+
+/** Carrier line of the document: the order's carrier, else the customer's default, else null (a dash). */
+export function carrierNameOf(draft: Pick<DraftRecord, "carrierCode">, extras: Pick<OrderPdfExtras, "carriers" | "customerDefaultCarrierName">): string | null {
+  const own = draft.carrierCode === null ? undefined : extras.carriers?.find((carrier) => carrier.code === draft.carrierCode)?.name;
+  return resolveDocumentCarrier(own, extras.customerDefaultCarrierName);
 }
 
 export function orderDocumentOf(draft: DraftRecord, lines: readonly EditorLine[], extras: OrderPdfExtras = {}): OrderDocumentModel {
@@ -70,6 +82,8 @@ export function orderDocumentOf(draft: DraftRecord, lines: readonly EditorLine[]
     erpNumber: erpNumberOfDraft(draft),
     customerCode: draft.customerCode,
     customerName: draft.customerName,
+    carrierName: carrierNameOf(draft, extras),
+    ...(extras.customerRegistry === undefined ? {} : { customerRegistry: extras.customerRegistry }),
     conditions: orderDocumentConditions({
       negotiationTypeCode: draft.negotiationTypeCode,
       ...(extras.negotiationTypes === undefined ? {} : { negotiationTypes: extras.negotiationTypes }),

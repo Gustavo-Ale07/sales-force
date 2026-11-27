@@ -1,7 +1,7 @@
 import { FreightTypeSchema, type FreightType } from '@salesforce/contracts';
 import type { ReleaseLevel, DiscountAuthorityStatus, OrderApproval, OrderDetail, OrderItemDetail as OrderItemDto, OrderListItem, OrderReview, OrderStatus, ProductImage } from '@salesforce/contracts';
 import type { SalesOrderErpStageRow } from '@salesforce/db';
-import { classifyOrderStage, computeOrderIpi, computeOrderTotals, customerOrderBlock, normalizeDecimalString, releaseLevelText, type IpiRate, type ReleaseLevelState } from '@salesforce/domain';
+import { canEditFromStage, classifyOrderStage, computeOrderIpi, computeOrderTotals, customerOrderBlock, normalizeDecimalString, releaseLevelText, type IpiRate, type ReleaseLevelState } from '@salesforce/domain';
 import { isBlockedRaw } from '../mirror/mirror.repository.js';
 import { decodeReleaseDetail, decodeReleaseEventCodes, storedReleaseState } from './release-events.js';
 import type { ApprovalWithDecider, OrderCustomerState, OrderItemRow, OrderListRow, OrderRow } from './orders.repository.js';
@@ -203,6 +203,12 @@ export function listGrandTotal(items: readonly { productCode: number; estimatedL
   ).grandTotalEstimated;
 }
 
+/** "Editar pedido" hint from the mirror (the worker decides live): sent or refused, and still untouched in Sankhya. */
+function canEditOf(order: OrderRow, stored: SalesOrderErpStageRow | null | undefined): boolean {
+  if (order.status !== 'sent' && order.status !== 'rejected') return false;
+  return canEditFromStage(stored == null ? null : { code: stored.stage }, order.erpNumber != null, order.status);
+}
+
 export function toOrderListItem(row: OrderListRow, grandTotalEstimated?: string): OrderListItem {
   const { order } = row;
   return {
@@ -228,6 +234,7 @@ export function toOrderListItem(row: OrderListRow, grandTotalEstimated?: string)
     erpStage: erpStageOf(order, row.stage),
     erpDelivery: erpDeliveryOf(order.status, row.deliveryErrorClass, row.deliveryErrorMessage),
     review: reviewOf(order.status, row),
+    canEdit: canEditOf(order, row.stage),
     version: order.version,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
@@ -300,6 +307,7 @@ export function toOrderDetail(
     erpStage: erpStageOf(order, erpStage),
     erpDelivery: erpDeliveryOf(order.status, lastDelivery?.errorClass ?? null, lastDelivery?.message ?? null),
     review: reviewOf(order.status, customer),
+    canEdit: canEditOf(order, erpStage),
     version: order.version,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),

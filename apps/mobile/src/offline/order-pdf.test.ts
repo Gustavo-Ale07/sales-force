@@ -2,7 +2,7 @@ import { CUSTOMER_BLOCK_MESSAGES, CUSTOMER_UNAVAILABLE_MESSAGE, LEGACY_CUSTOMER_
 import { draftRecord } from "../test-doubles";
 import type { EditorLine } from "../data/order-draft";
 import { saleValue } from "./sales";
-import { buildOrderPdfHtml, orderDocumentOf, OrderPdfCustomerUnavailableError, pdfStatusLabelOf, shareOrderPdf, type OrderPdfPort } from "./order-pdf";
+import { buildOrderPdfHtml, carrierNameOf, orderDocumentOf, OrderPdfCustomerUnavailableError, pdfStatusLabelOf, shareOrderPdf, type OrderPdfPort } from "./order-pdf";
 
 const line = (over: Partial<EditorLine> = {}): EditorLine => ({
   key: "k1",
@@ -175,6 +175,54 @@ describe("EAN and discounted unit value in the PDF", () => {
     expect(html).toContain("Valor com desconto");
     expect(html).toContain("7891234567895");
     expect(html.match(/7891234567895/g)).toHaveLength(1);
+  });
+});
+
+describe("transportadora e cadastro do cliente no PDF", () => {
+  const carriers = [{ code: 5, name: "Rápido Ação Ltda" }];
+  const text = (html: string): string => html.replace(/<style>[\s\S]*?<\/style>/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+
+  it("usa a transportadora do pedido, senão a padrão do cliente, senão traço", () => {
+    expect(carrierNameOf(draftRecord({ carrierCode: 5 }), { carriers, customerDefaultCarrierName: "Padrão SA" })).toBe("Rápido Ação Ltda");
+    expect(carrierNameOf(draftRecord({ carrierCode: null }), { carriers, customerDefaultCarrierName: "Padrão SA" })).toBe("Padrão SA");
+    expect(carrierNameOf(draftRecord({ carrierCode: 99 }), { carriers, customerDefaultCarrierName: "Padrão SA" })).toBe("Padrão SA");
+    expect(carrierNameOf(draftRecord({ carrierCode: null }), {})).toBeNull();
+    const html = buildOrderPdfHtml(draftRecord({ carrierCode: null }), [line()], null);
+    expect(html).toContain("Transportadora");
+    expect(html).toContain("<strong>—</strong>");
+  });
+
+  it("imprime o cadastro com traço nos vazios, celular antes de telefone e acentos", () => {
+    const html = buildOrderPdfHtml(draftRecord({ carrierCode: 5 }), [line()], null, {
+      carriers,
+      customerRegistry: { postalCode: "01310100", street: "Av. São João", number: "10", neighborhood: "Conceição", city: "São Paulo", state: "sp", phone: "1133334444", email: "a@b.com" },
+    });
+    const t = text(html);
+    expect(t).toContain("CEP: 01310-100");
+    expect(t).toContain("Endereço: Av. São João, nº 10");
+    expect(t).toContain("Bairro: Conceição");
+    expect(t).toContain("UF: SP");
+    expect(t).toContain("Telefone: (11) 3333-4444");
+    expect(t).toContain("E-mail: a@b.com");
+    expect(t).toContain("Rápido Ação Ltda");
+    const empty = text(buildOrderPdfHtml(draftRecord(), [line()], null, { customerRegistry: { email: null, city: undefined } }));
+    expect(empty).not.toMatch(/null|undefined/);
+    expect(empty).toContain("E-mail: —");
+  });
+
+  it("textos longos entram escapados e o CSS quebra linha dentro da coluna", () => {
+    const long = "Rua ".concat("Muito Longa ".repeat(40));
+    const html = buildOrderPdfHtml(draftRecord(), [line()], null, { customerRegistry: { street: long, email: `${"x".repeat(120)}@exemplo.com.br<b>` } });
+    expect(html).toContain("overflow-wrap: anywhere");
+    expect(html).toContain("&lt;b&gt;");
+    expect(html).not.toContain("<b>");
+  });
+
+  it("muitos itens: o bloco de cliente fica inteiro (sem quebra no meio)", () => {
+    const lines = Array.from({ length: 80 }, (_, i) => line({ key: `k${i}`, productCode: 3000 + i }));
+    const html = buildOrderPdfHtml(draftRecord(), lines, null);
+    expect(html.match(/<tr>/g)?.length).toBeGreaterThan(80);
+    expect(html).toContain("break-inside: avoid");
   });
 });
 

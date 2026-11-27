@@ -30,6 +30,20 @@ function toListItem(row: CustomerRow, overdue = false): CustomerListItem {
     sellerName: row.sellerName,
     priceTableCode: row.priceTableCode,
     ...(overdue ? { overdue: true } : {}),
+    registry: {
+      postalCode: row.postalCode ?? null,
+      street: row.street ?? null,
+      number: row.addressNumber ?? null,
+      complement: row.complement ?? null,
+      neighborhood: row.neighborhood ?? null,
+      city: row.city ?? null,
+      state: row.state ?? null,
+      // No validated ERP column for a mobile phone or a default carrier (spike §9.70): never invented.
+      mobile: null,
+      phone: row.phone ?? null,
+      email: row.email ?? null,
+    },
+    defaultCarrierCode: null,
     ...(row.phone !== undefined || row.email !== undefined ? { contactVersion: contactVersionOf(row.phone, row.email) } : {}),
   };
 }

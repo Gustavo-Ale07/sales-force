@@ -4,11 +4,11 @@ import type { DraftRecord } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import { lineAmountsOf, previewDraft, type EditorLine } from "../data/order-draft";
 import { describeSkippedLines, isQuotationTop, topLabel } from "../data/order-header";
-import type { OrderEntryConfiguration, OrderRepository } from "../data/ports";
+import type { CustomerRepository, OrderEntryConfiguration, OrderRepository } from "../data/ports";
 import { formatBrl } from "../lib/money";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { erpNumberOfDraft, isQuotationDraft, orderIdentity } from "../offline/order-number";
-import { shareOrderPdf, type OrderPdfPort } from "../offline/order-pdf";
+import { shareOrderPdf, type OrderPdfExtras, type OrderPdfPort } from "../offline/order-pdf";
 import { saleValue } from "../offline/sales";
 import { approvalViewOf, type ApprovalView, type DiscountAuthorityMode } from "../offline/approval-status";
 import { releaseViewOf, type ReleaseTone } from "../offline/release-status";
@@ -38,7 +38,9 @@ export interface SaleDetailScreenProps {
   readonly localOrders: LocalOrdersPort;
   readonly connectivity: ConnectivityState;
   /** Online read of the server's order, to show the discount approval state read-only (M-14). Optional: without it the card is simply absent. */
-  readonly orders?: Pick<OrderRepository, "get"> & Partial<Pick<OrderRepository, "getEntryConfiguration">>;
+  readonly orders?: Pick<OrderRepository, "get"> & Partial<Pick<OrderRepository, "getEntryConfiguration" | "listCarriers">>;
+  /** Local customer cache: the registry data (address, phone, e-mail) the PDF prints. Absent = those lines print as a dash. */
+  readonly customers?: Pick<CustomerRepository, "cached">;
   /** Share-sheet PDF (PLAC template, from the local data, works offline). Absent = no button. */
   readonly orderPdf?: OrderPdfPort;
   readonly onBack: () => void;
@@ -46,6 +48,8 @@ export interface SaleDetailScreenProps {
   readonly onChanged: () => void;
   readonly onContinue: (localId: string) => void;
   readonly onDuplicate: (localId: string) => void;
+  /** "Editar" on an order already sent (EDIT-1): opens the editor on the server order (online only). */
+  readonly onEdit?: (orderId: string) => void;
   readonly onSyncNow: () => void;
 }
 
@@ -64,8 +68,36 @@ function money(value: string | null): string {
   return value === null ? "Sem preço" : (formatBrl(value) ?? value);
 }
 
+/**
+ * Registry data and carrier names for the PDF, read from the local mirror (works offline). Every failure leaves the extras out:
+ * the PDF then prints dashes, never invented data.
+ */
+async function pdfRegistryExtras(
+  customerCode: number,
+  customers: Pick<CustomerRepository, "cached"> | undefined,
+  orders: SaleDetailScreenProps["orders"],
+): Promise<Pick<OrderPdfExtras, "carriers" | "customerRegistry" | "customerDefaultCarrierName">> {
+  const extras: { carriers?: readonly { code: number; name: string }[]; customerRegistry?: NonNullable<OrderPdfExtras["customerRegistry"]>; customerDefaultCarrierName?: string | null } = {};
+  try {
+    if (orders?.listCarriers !== undefined) extras.carriers = await orders.listCarriers();
+  } catch {
+    /* carriers are optional */
+  }
+  try {
+    const customer = customers?.cached === undefined ? null : await customers.cached(customerCode);
+    // Fields added to the contract after the generated types: read tolerantly.
+    const extra = customer as (typeof customer & { registry?: NonNullable<OrderPdfExtras["customerRegistry"]>; defaultCarrierCode?: string | null }) | null;
+    if (extra?.registry !== undefined) extras.customerRegistry = extra.registry;
+    const defaultCode = extra?.defaultCarrierCode ?? null;
+    if (defaultCode !== null) extras.customerDefaultCarrierName = extras.carriers?.find((carrier) => String(carrier.code) === defaultCode)?.name ?? null;
+  } catch {
+    /* the local cache is optional */
+  }
+  return extras;
+}
+
 /** Read-only view of one sale, with only the actions that are safe for its state. Explains what each state means in plain words. */
-export function SaleDetailScreen({ localId, localOrders, connectivity, orders, orderPdf, onBack, onChanged, onContinue, onDuplicate, onSyncNow }: SaleDetailScreenProps) {
+export function SaleDetailScreen({ localId, localOrders, connectivity, orders, customers, orderPdf, onBack, onChanged, onContinue, onDuplicate, onEdit, onSyncNow }: SaleDetailScreenProps) {
   const modal = useAppModal();
   const errors = useErrorPopup();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -90,7 +122,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     };
   }, [localOrders, localId, reloads]);
 
-  const [fetched, setFetched] = useState<{ readonly remoteId: string; readonly view: ApprovalView | null; readonly topCode: number | null } | null>(null);
+  const [fetched, setFetched] = useState<{ readonly remoteId: string; readonly view: ApprovalView | null; readonly topCode: number | null; readonly canEdit: boolean } | null>(null);
   // The TOPs come from the configuration the device already holds, so the quotation label works offline.
   const [tops, setTops] = useState<OrderEntryConfiguration["sales"]["orderTops"] | null>(null);
   const [negotiationTypes, setNegotiationTypes] = useState<OrderEntryConfiguration["sales"]["negotiationTypes"] | null>(null);
@@ -120,7 +152,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
         ? Promise.resolve("force")
         : orders.getEntryConfiguration().then((config) => config.sales.discountAuthorityMode, () => "force" as const);
     Promise.all([orders.get(remoteId), mode])
-      .then(([order, authority]) => current && setFetched({ remoteId, view: approvalViewOf(order, authority), topCode: order.topCode }))
+      .then(([order, authority]) => current && setFetched({ remoteId, view: approvalViewOf(order, authority), topCode: order.topCode, canEdit: order.canEdit === true }))
       // The state is a courtesy read: when it fails the card is just absent, the local view is unaffected.
       .catch(() => undefined);
     return () => {
@@ -128,6 +160,8 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     };
   }, [orders, remoteId, offline, reloads]);
   const approval = fetched !== null && fetched.remoteId === remoteId && !offline ? fetched.view : null;
+  // The server decides (`canEdit`); the last read stays valid for showing the button offline, where the action itself says "Sem conexão".
+  const canEdit = fetched !== null && fetched.remoteId === remoteId && fetched.canEdit;
   // The server's TOP wins when it was read just now; otherwise what this device stored.
   const effectiveTop = fetched !== null && fetched.remoteId === remoteId && !offline ? fetched.topCode : (loaded?.draft.topCode ?? null);
 
@@ -186,23 +220,6 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [heldKey]);
 
-  // A refused send says why once when the order is opened (the server's reason as the catalog popup, with its way out).
-  const refusedCode = loaded?.draft.sendState === "refused" ? (loaded.draft.sendCode ?? "send_refused") : null;
-  const refusedKey = refusedCode === null ? null : `${localId}:${refusedCode}:${loaded?.draft.sendAttempts ?? 0}`;
-  const announcedRefusal = useRef<string | null>(null);
-  useEffect(() => {
-    if (refusedCode === null || refusedKey === announcedRefusal.current) return;
-    announcedRefusal.current = refusedKey;
-    errors.reportCode(
-      refusedCode,
-      { retry: () => void tryConfirm(), change_customer: () => onContinue(localId), remove_item: () => onContinue(localId), edit_items: () => onContinue(localId), edit_header: () => onContinue(localId) },
-      loaded?.draft.sendError ?? undefined,
-      loaded?.draft.sendError && ["validation_failed", "header_not_eligible", "send_refused"].includes(refusedCode) ? { message: loaded.draft.sendError } : undefined,
-    );
-    // Announce once per order and cause.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refusedKey]);
-
   // The last stage read from Sankhya failed to refresh: say so once per failure with a retry that runs a sync (the last stage stays on screen).
   const stage = loaded === null ? null : activeStageView(loaded.draft);
   const stageErrorKey = stage === null || stage.readErrorCode === null ? null : `${localId}:${stage.readErrorCode}:${stage.asOf}`;
@@ -243,7 +260,8 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
   async function sharePdf() {
     if (orderPdf === undefined || sharing) return;
     setSharing(true);
-    const result = await shareOrderPdf(orderPdf, draft, lines, { kind: isQuotationView ? "quote" : "order", ...(negotiationTypes === null ? {} : { negotiationTypes }) });
+    const registryExtras = await pdfRegistryExtras(draft.customerCode, customers, orders);
+    const result = await shareOrderPdf(orderPdf, draft, lines, { kind: isQuotationView ? "quote" : "order", ...(negotiationTypes === null ? {} : { negotiationTypes }), ...registryExtras });
     setSharing(false);
     if (!result.ok) {
       if (result.reason === "empty") modal.show({ variant: "error", title: "PDF não gerado", message: "Este pedido não tem itens." });
@@ -277,6 +295,14 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
       return;
     }
     onContinue(result.localId);
+  }
+
+  function editSent() {
+    if (offline) {
+      modal.show({ variant: "error", title: "Sem conexão", message: "Conecte-se à internet para editar o pedido." });
+      return;
+    }
+    if (draft.remoteId !== null) onEdit?.(draft.remoteId);
   }
 
   function confirmDelete() {
@@ -429,6 +455,11 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
           {actions.continue && (
             <Pressable style={styles.primary} onPress={() => onContinue(draft.localId)} accessibilityRole="button" accessibilityLabel="Editar pedido">
               <Text style={styles.primaryText}>Editar pedido</Text>
+            </Pressable>
+          )}
+          {canEdit && onEdit !== undefined && !actions.continue && draft.remoteId !== null && (
+            <Pressable style={styles.primary} onPress={editSent} accessibilityRole="button" accessibilityLabel="Editar">
+              <Text style={styles.primaryText}>Editar</Text>
             </Pressable>
           )}
           {actions.send && (

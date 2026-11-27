@@ -7,7 +7,7 @@ import { formatBrl } from "../lib/money";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { EMPTY_SALES_FILTERS, type SalesFilters, type SalesRow, type SalesSummary } from "../offline/sales";
 import { erpNumberOfDraft, isQuotationDraft, orderIdentity } from "../offline/order-number";
-import { saleActions, saleBadge, sendPhaseOf } from "../offline/sales-status";
+import { saleActions, saleBadge } from "../offline/sales-status";
 import { colors, control, radius, spacing } from "../theme";
 import { Icon } from "./icons";
 import type { OrderPdfPort } from "../offline/order-pdf";
@@ -32,21 +32,8 @@ export function describeSaleMeta(draft: SalesRow["draft"]): string {
   return `${number} · ${draft.itemCount} ${draft.itemCount === 1 ? "item" : "itens"} · ${formatDateTime(draft.createdAt)}`;
 }
 
-function attentionText(draft: SalesRow["draft"]): string | null {
-  if (draft.status === "sync_error") return "Não foi possível enviar. Toque para ver o que fazer.";
-  if (draft.status === "conflict") return "Alterado em outro lugar. Toque para escolher a versão.";
-  if (draft.status === "needs_review") return "Preços mudaram. Toque para revisar.";
-  // "Precisa de correção": the reason under the badge, the same words as the site (server delivery error, `deliveryErrorText`).
-  if (draft.status === "synced" && (draft.sendState === "refused" || draft.sendState === "submitted")) {
-    const phase = sendPhaseOf(draft);
-    if ((phase === "rejected" || phase === "refused") && draft.sendError) return draft.sendError;
-  }
-  return null;
-}
-
 const SaleRowView = memo(function SaleRowView({ row, onOpen }: { row: SalesRow; onOpen: (localId: string, editable: boolean) => void }) {
   const { draft, value } = row;
-  const attention = attentionText(draft);
   const editable = isEditableSale(draft);
   const saved = saleBadge(draft).label === "Salvo no aparelho";
   return (
@@ -68,7 +55,6 @@ const SaleRowView = memo(function SaleRowView({ row, onOpen }: { row: SalesRow; 
         {value.partial && value.amount !== null && <Text style={styles.partial}>Valor parcial</Text>}
         {editable && <Text style={styles.edit}>Editar</Text>}
       </View>
-      {attention !== null && <Text style={styles.attention}>{attention}</Text>}
       {draft.erpStage?.releaseLevel?.text ? <Text style={styles.meta}>{draft.erpStage.releaseLevel.text}</Text> : null}
     </Pressable>
   );
@@ -88,6 +74,8 @@ export interface SalesScreenProps {
   readonly onNewSale: () => void;
   readonly onContinue: (localId: string) => void;
   readonly onDuplicate: (localId: string) => void;
+  /** "Editar" on a sent order (EDIT-1), by the server order id. */
+  readonly onEdit?: (orderId: string) => void;
   readonly onSyncNow: () => void;
   /** Changes whenever the seller taps the "Minhas vendas" segment: an open detail closes and the list shows again. */
   readonly resetSignal?: number;
@@ -121,7 +109,7 @@ function describeSummary(summary: SalesSummary | null, group: SalesGroup): strin
  * backend) and "Enviados" (accepted by the Force backend — NOT the ERP). Everything is read from the local database,
  * so the whole screen works offline.
  */
-export function SalesScreen({ localOrders, customers, products, orders, orderPdf, syncStatus, connectivity, onUnauthenticated, onNewSale, onContinue, onDuplicate, onSyncNow, resetSignal = 0, refreshSignal = 0, openRequest = null, onDetailChange }: SalesScreenProps) {
+export function SalesScreen({ localOrders, customers, products, orders, orderPdf, syncStatus, connectivity, onUnauthenticated, onNewSale, onContinue, onDuplicate, onEdit, onSyncNow, resetSignal = 0, refreshSignal = 0, openRequest = null, onDetailChange }: SalesScreenProps) {
   const [filters, setFilters] = useState<SalesFilters>({ group: "unsent", ...EMPTY_SALES_FILTERS });
   const [search, setSearch] = useState("");
   const [summary, setSummary] = useState<SalesSummary | null>(null);
@@ -256,11 +244,13 @@ export function SalesScreen({ localOrders, customers, products, orders, orderPdf
           localOrders={localOrders}
           connectivity={connectivity}
           {...(orders !== undefined ? { orders } : {})}
+          customers={customers}
           {...(orderPdf !== undefined ? { orderPdf } : {})}
           onBack={() => setOpenId(null)}
           onChanged={changed}
           onContinue={onContinue}
           onDuplicate={onDuplicate}
+          {...(onEdit !== undefined ? { onEdit } : {})}
           onSyncNow={onSyncNow}
         />
       )}

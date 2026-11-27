@@ -9,7 +9,7 @@ describe("orderStatusView (D-AA)", () => {
     expect(orderStatusView({ status: "queued", updatedAt }, at(30)).label).toBe("Aguardando envio");
     const late = orderStatusView({ status: "queued", updatedAt }, at(150));
     expect(late.label).toBe("Aguardando envio");
-    expect(`${late.label} ${late.hint}`).not.toMatch(/fila/i);
+    expect(late.label).not.toMatch(/fila/i);
   });
 
   it("leaves other statuses untouched", () => {

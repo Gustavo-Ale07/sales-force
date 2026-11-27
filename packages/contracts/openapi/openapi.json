@@ -4029,6 +4029,100 @@
         }
       }
     },
+    "/orders/{id}/edit": {
+      "post": {
+        "operationId": "editOrder",
+        "tags": [
+          "orders"
+        ],
+        "summary": "Edit an order already sent to Sankhya (delete and recreate the unconfirmed note)",
+        "description": "Owner ruling 2026-11-27. Queues the edit (outbox operation edit_order) and answers 200 with the order in `queued`; the worker revalidates eligibility live (note not confirmed, invoiced, in a load, released or financially settled), deletes the old note and recreates it, keeping the previous ERP note number in the history. Idempotent per `clientRequestId`. 409 conflict (details.reason `not_editable_in_erp`) when the order is not eligible; 409 version_conflict when `expectedVersion` is stale; 409 dataset_mismatch; 409 erp_submission_disabled. The server reprices and revalidates as in a replace.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditOrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Edição enfileirada; pedido em envio",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/orders/{id}/convert": {
       "post": {
         "operationId": "convertQuote",
@@ -8376,6 +8470,15 @@
           "contactVersion": {
             "type": "string"
           },
+          "registry": {
+            "$ref": "#/components/schemas/CustomerRegistry"
+          },
+          "defaultCarrierCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "priceTableName": {
             "type": [
               "string",
@@ -8701,6 +8804,15 @@
           },
           "contactVersion": {
             "type": "string"
+          },
+          "registry": {
+            "$ref": "#/components/schemas/CustomerRegistry"
+          },
+          "defaultCarrierCode": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -8940,6 +9052,84 @@
         ],
         "additionalProperties": false
       },
+      "CustomerRegistry": {
+        "type": "object",
+        "properties": {
+          "postalCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "street": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "complement": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "neighborhood": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "city": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mobile": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "postalCode",
+          "street",
+          "number",
+          "complement",
+          "neighborhood",
+          "city",
+          "state",
+          "mobile",
+          "phone",
+          "email"
+        ],
+        "additionalProperties": false
+      },
       "CustomerSendState": {
         "type": "string",
         "enum": [
@@ -9169,6 +9359,101 @@
         "required": [
           "clientRequestId",
           "expectedDataset"
+        ],
+        "additionalProperties": false
+      },
+      "EditOrderRequest": {
+        "type": "object",
+        "properties": {
+          "clientRequestId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "expectedDataset": {
+            "$ref": "#/components/schemas/DatasetIdentity"
+          },
+          "customerCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "topCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "carrierCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freightType": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FreightType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "discountAboveLimitAccepted": {
+            "type": "boolean"
+          },
+          "negotiationTypeCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "items": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItemInput"
+            }
+          }
+        },
+        "required": [
+          "clientRequestId",
+          "expectedVersion",
+          "expectedDataset",
+          "customerCode",
+          "negotiationTypeCode",
+          "notes",
+          "items"
         ],
         "additionalProperties": false
       },
@@ -10937,6 +11222,9 @@
               }
             ]
           },
+          "canEdit": {
+            "type": "boolean"
+          },
           "version": {
             "type": "integer",
             "minimum": 1
@@ -11948,6 +12236,9 @@
                 "type": "null"
               }
             ]
+          },
+          "canEdit": {
+            "type": "boolean"
           },
           "version": {
             "type": "integer",

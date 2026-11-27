@@ -103,6 +103,7 @@ import { assertSandboxHost } from '../write/host-allowlist.js';
 import { INCLUIR_NOTA_PATH, buildIncluirNotaRequestText, parseIncluirNotaResponse } from '../write/incluir-nota.js';
 import { CONFIRMAR_NOTA_PATH, buildConfirmarNotaRequestText, parseConfirmarNotaResponse } from '../write/confirmar-nota.js';
 import type { ConfirmOrderResult } from '../write/confirmar-nota.js';
+import { EXCLUIR_NOTAS_PATH, buildExcluirNotasRequestText, parseExcluirNotasResponse, type DeleteOrderResult } from '../write/excluir-notas.js';
 import type {
   ErpOrderRef,
   IncludeOrderResult,
@@ -112,6 +113,7 @@ import type {
   ErpOrderStatusReading,
   ErpOrderReleaseReading,
   ErpOrderStageReading,
+  ErpOrderEditReading,
   ErpBillingItemReading,
   ErpBillingReading,
   ErpReleaseLineReading,
@@ -709,6 +711,44 @@ export class RealSankhyaGateway implements SankhyaGateway {
     if (this.#orderWrite.mode !== 'live') throw new NotImplementedError(ORDER_WRITE_NOT_ENABLED_MESSAGE);
     const response = await this.#write(CONFIRMAR_NOTA_PATH, buildConfirmarNotaRequestText(erpOrderNumber), options?.signal);
     return parseConfirmarNotaResponse(response.status, response.body, parseRetryAfterMs(response.headers['retry-after']));
+  }
+
+  /**
+   * CACSP.excluirNotas (F-51, edit = delete and recreate). Same gate as `includeOrder`: live Sandbox configuration only, no HTTP
+   * call otherwise. The caller has ALREADY re-read `readOrderEditFacts` live and the domain predicate allowed it.
+   */
+  async deleteOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<DeleteOrderResult> {
+    if (this.#orderWrite.mode !== 'live') throw new NotImplementedError(ORDER_WRITE_NOT_ENABLED_MESSAGE);
+    const response = await this.#write(EXCLUIR_NOTAS_PATH, buildExcluirNotasRequestText(erpOrderNumber), options?.signal);
+    return parseExcluirNotasResponse(response.status, response.body, parseRetryAfterMs(response.headers['retry-after']));
+  }
+
+  /**
+   * Edit eligibility facts, SELECT only, batched. Reuses the stage read (header, release lines, invoicing link) and adds the
+   * financial records: a TGFFIN row is DEFINITIVE when PROVISAO is not 'S' or DHBAIXA is filled (an unconfirmed order already
+   * carries one provisional title, F-51/§9.69). Any failed query fails the whole call: fail-closed, nothing is guessed.
+   */
+  async readOrderEditFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderEditReading[]> {
+    const stages = await this.readOrderStageFacts(erpOrderNumbers, options);
+    const definitive = new Set<number>();
+    for (let start = 0; start < erpOrderNumbers.length; start += RELEASE_READ_CHUNK) {
+      const list = erpOrderNumbers.slice(start, start + RELEASE_READ_CHUNK).join(',');
+      const columns = ['NUNOTA', 'DHBAIXA', 'PROVISAO'] as const;
+      const found = await this.#query(`SELECT NUNOTA, DHBAIXA, PROVISAO FROM TGFFIN WHERE NUNOTA IN (${list})`, columns, options?.signal);
+      found.rows.forEach((cells, index) => {
+        const row = new RowReader('orders', columns, cells, index);
+        if (textCell(cells[1]) !== null || textCell(cells[2]) !== 'S') definitive.add(row.int('NUNOTA'));
+      });
+    }
+    return stages.map((stage): ErpOrderEditReading => ({
+      erpOrderNumber: stage.erpOrderNumber,
+      found: stage.found,
+      statusNota: stage.statusNota,
+      orderCargo: stage.orderCargo,
+      hasReleaseLines: (stage.releaseLines ?? []).length > 0 || stage.pendingReleases.length > 0,
+      hasInvoiceLink: stage.hasInvoiceLink,
+      hasDefinitiveFinancial: definitive.has(stage.erpOrderNumber),
+    }));
   }
 
   // ---- profile photo write (spike S1.8) ----------------------------------------------------------

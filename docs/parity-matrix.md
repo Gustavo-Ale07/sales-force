@@ -78,7 +78,10 @@ Lotes (definidos pelo dono): 1 e 2 em andamento hoje; 3 e 4 NÃO iniciar; FORA =
 | Aba Metas do site (27/11) | sem painel de metas; o painel segue só no app | painel de metas só no app | exceção declarada | P | não | 27/11 | decidido | |
 | Vendedor acessa as próprias metas pelo menu | item "Metas" na barra do topo (só vendedor) | tela Metas já existe no app | igual | P | não | 27/11 | resolvido | |
 | Metas e positivação (27/11) | mesma API (meta geral OU soma dos produtos; positivação via TGFVAR) | mesma API; painel de metas só no app (exceção declarada prévia) | parcial | M | sim | 27/11 | feito no servidor; painel só no app; realizado null | 838c400e |
-| Editar pedido (27/11) | só Duplicar | só Duplicar | sim | G | depende do Sankhya | — | pendente: nenhum caminho seguro (spike §9.67) | |
+| Editar pedido (27/11) | botão "Editar" só com `canEdit` (senão só Duplicar, sem texto); `POST /orders/{id}/edit` | idem, operação online ("Sem conexão" se offline) | sim | G | apagar e recriar (EDIT-1, spike §9.69) | — | feito (28/11); prova no Sandbox após o deploy | |
+| Status sem texto explicativo (27/11) | só selo e número; sem Reenviar no editor | só selo e número | não | P | não | — | feito (28/11) | |
+| PDF: bloco Cliente com cadastro e Transportadora (27/11) | feito (domínio compartilhado `order-document.ts`) | feito (mesmo `renderOrderHtml`) | não | M | espelho do cliente (§9.70); celular e transportadora padrão sem coluna → "—" | — | feito (28/11) | |
+| OTA aplicada na abertura (27/11) | n/a | baixa, aplica e recarrega uma vez, sem mensagem | não | P | não | — | feito (28/11) | exceção técnica: só existe no app |
 
 ## Catálogo
 

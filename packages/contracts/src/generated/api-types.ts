@@ -906,6 +906,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orders/{id}/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Edit an order already sent to Sankhya (delete and recreate the unconfirmed note)
+         * @description Owner ruling 2026-11-27. Queues the edit (outbox operation edit_order) and answers 200 with the order in `queued`; the worker revalidates eligibility live (note not confirmed, invoiced, in a load, released or financially settled), deletes the old note and recreates it, keeping the previous ERP note number in the history. Idempotent per `clientRequestId`. 409 conflict (details.reason `not_editable_in_erp`) when the order is not eligible; 409 version_conflict when `expectedVersion` is stale; 409 dataset_mismatch; 409 erp_submission_disabled. The server reprices and revalidates as in a replace.
+         */
+        post: operations["editOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orders/{id}/convert": {
         parameters: {
             query?: never;
@@ -1811,6 +1831,8 @@ export interface components {
             priceTableCode: number | null;
             overdue?: boolean;
             contactVersion?: string;
+            registry?: components["schemas"]["CustomerRegistry"];
+            defaultCarrierCode?: string | null;
             priceTableName: string | null;
             resolvedPriceTable: {
                 code: number;
@@ -1864,6 +1886,8 @@ export interface components {
             priceTableCode: number | null;
             overdue?: boolean;
             contactVersion?: string;
+            registry?: components["schemas"]["CustomerRegistry"];
+            defaultCarrierCode?: string | null;
         };
         CustomerOrderHabits: {
             orderCount: number;
@@ -1903,6 +1927,18 @@ export interface components {
         };
         CustomerRegistrationsResponse: {
             items: components["schemas"]["CustomerRegistrationView"][];
+        };
+        CustomerRegistry: {
+            postalCode: string | null;
+            street: string | null;
+            number: string | null;
+            complement: string | null;
+            neighborhood: string | null;
+            city: string | null;
+            state: string | null;
+            mobile: string | null;
+            phone: string | null;
+            email: string | null;
         };
         /** @enum {string} */
         CustomerSendState: "sent" | "pending";
@@ -1955,6 +1991,20 @@ export interface components {
             /** Format: uuid */
             clientRequestId: string;
             expectedDataset: components["schemas"]["DatasetIdentity"];
+        };
+        EditOrderRequest: {
+            /** Format: uuid */
+            clientRequestId: string;
+            expectedVersion: number;
+            expectedDataset: components["schemas"]["DatasetIdentity"];
+            customerCode: number;
+            topCode?: number | null;
+            carrierCode?: number | null;
+            freightType?: components["schemas"]["FreightType"] | null;
+            discountAboveLimitAccepted?: boolean;
+            negotiationTypeCode: number | null;
+            notes: string | null;
+            items: components["schemas"]["OrderItemInput"][];
         };
         ErpSubmissionDisabledError: {
             /** @constant */
@@ -2305,6 +2355,7 @@ export interface components {
                 message?: string | null;
             } | null;
             review: components["schemas"]["OrderReview"] | null;
+            canEdit?: boolean;
             version: number;
             createdAt: components["schemas"]["IsoTimestamp"];
             updatedAt: components["schemas"]["IsoTimestamp"];
@@ -2479,6 +2530,7 @@ export interface components {
                 message?: string | null;
             } | null;
             review: components["schemas"]["OrderReview"] | null;
+            canEdit?: boolean;
             version: number;
             createdAt: components["schemas"]["IsoTimestamp"];
             updatedAt: components["schemas"]["IsoTimestamp"];
@@ -6018,6 +6070,77 @@ export interface operations {
         };
         responses: {
             /** @description Pedido atualizado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderDetail"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    editOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description Edição enfileirada; pedido em envio */
             200: {
                 headers: {
                     [name: string]: unknown;

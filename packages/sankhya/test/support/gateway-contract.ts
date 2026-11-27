@@ -163,6 +163,9 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
         'readOrderStatusFacts',
         'readOrderReleaseFacts',
         'readOrderStageFacts',
+        // Owner ruling 2026-11-27 "Editar pedido": the live eligibility read and the delete of an UNCONFIRMED note (excluirNotas, F-51); the real adapter refuses without live config.
+        'readOrderEditFacts',
+        'deleteOrder',
         // D-AR: the customer upsert quartet (write guarded by SANKHYA_CUSTOMER_WRITE_ENABLED in the worker).
         'upsertPartner',
         'findPartnerByOrigin',

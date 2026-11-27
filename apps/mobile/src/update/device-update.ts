@@ -27,6 +27,18 @@ export const startupUpdateCheck: (() => Promise<StartupCheck>) | undefined = cha
     }
   : undefined;
 
+let launchOtaStarted = false;
+
+/**
+ * On open: check, download and apply a new OTA at once (one reload, no message). Any failure or "no update" leaves the
+ * app running on the current version. Runs once per process; after the reload the new bundle finds nothing newer.
+ */
+export function applyOtaOnLaunch(updates: UpdatesPort = loadUpdates()): Promise<void> {
+  if (launchOtaStarted || channel === undefined) return Promise.resolve();
+  launchOtaStarted = true;
+  return runOtaUpdate(updates).then(() => undefined, () => undefined);
+}
+
 /** Downloads, verifies and opens the installer; resolves with the pt-BR message to show. */
 export async function installUpdate(onStatus: (text: string) => void): Promise<string> {
   // OTA first (JS bundle): check, download, save local work, restart on the new bundle. No OTA -> the APK check below.

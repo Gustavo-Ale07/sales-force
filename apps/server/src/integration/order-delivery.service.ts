@@ -3,6 +3,7 @@ import {
   integrationOutbox,
   installationConfigurationVersion,
   salesOrder,
+  salesOrderErpHistory,
   salesOrderItem,
   type Database,
   type DbHandle,
@@ -20,12 +21,13 @@ import {
   type SankhyaOrderReadPort,
   type SankhyaWritePort,
 } from '@salesforce/sankhya';
-import { and, asc, eq, inArray, isNotNull, isNull, like, lt, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, like, lt, lte, sql } from 'drizzle-orm';
 import { validateInstallationConfiguration } from '../configuration/validate.js';
 import { AUDIT_ACTIONS, type AuditDetail, type AuditService } from '../iam/audit.service.js';
 import type { Logger } from '../observability/logger.js';
 import { maskStoredError } from '../observability/mask-error-message.js';
 import { freightTypeOf } from '../orders/order.mapper.js';
+import { OrderEditDelivery } from './order-edit-delivery.js';
 import { uuidv7 } from '../platform/ids.js';
 import type { Clock } from '../platform/tokens.js';
 import {
@@ -147,7 +149,11 @@ function describeError(error: unknown): string {
  *  - `dry_run` builds and stores the payload and calls nothing.
  */
 export class OrderDeliveryService {
-  constructor(private readonly deps: OrderDeliveryDeps) {}
+  private readonly edits: OrderEditDelivery;
+
+  constructor(private readonly deps: OrderDeliveryDeps) {
+    this.edits = new OrderEditDelivery(deps);
+  }
 
   private get database(): Database {
     return this.deps.db.db;
@@ -157,6 +163,8 @@ export class OrderDeliveryService {
   async runDue(options: RunOptions = {}): Promise<RunSummary> {
     await this.releaseNotImplementedParks();
     const recovered = await this.recoverStale();
+    // Owner ruling 2026-11-27 ("Editar pedido"): edits run first, so the re-queued send is picked up in the same sweep.
+    await this.edits.runDue(options);
     const limit = options.limit ?? DEFAULT_SWEEP_LIMIT;
     let processed = 0;
     while (processed < limit && options.signal?.aborted !== true) {
@@ -665,8 +673,15 @@ export class OrderDeliveryService {
         })
         .where(eq(integrationOutbox.id, row.id));
       await this.setOrderStatus(tx, order.id, ['queued', 'unknown'], 'sent', at, order.erpNumber ?? erpNumber);
+      // "Editar pedido": the note this one replaced (the newest history row), so the trail shows old and new NUNOTA.
+      const [previous] = await tx
+        .select({ erpNumber: salesOrderErpHistory.erpNumber })
+        .from(salesOrderErpHistory)
+        .where(eq(salesOrderErpHistory.orderId, order.id))
+        .orderBy(desc(salesOrderErpHistory.replacedAt))
+        .limit(1);
       await this.deps.audit.record(
-        { action: AUDIT_ACTIONS.orderErpSent, actorAccountId: null, detail: this.detail(row, order, { erpOrderNumber: erpNumber }) },
+        { action: AUDIT_ACTIONS.orderErpSent, actorAccountId: null, detail: this.detail(row, order, { erpOrderNumber: erpNumber, ...(previous === undefined ? {} : { previousErpOrderNumber: previous.erpNumber }) }) },
         tx,
       );
     });

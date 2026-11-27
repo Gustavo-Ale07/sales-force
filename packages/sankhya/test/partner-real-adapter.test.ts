@@ -16,6 +16,7 @@ import {
   type CustomerWriteSettings,
   type PartnerWriteRequest,
 } from '../src/index.js';
+import { CUSTOMER_SPEC } from '../src/real/mapping.js';
 import type { HttpResponse, HttpTransport } from '../src/real/transport.js';
 import { MockSankhya, TEST_CREDENTIALS, ok, type ClockRef } from './support/mock-sankhya.js';
 
@@ -112,6 +113,8 @@ async function failureOf(promise: Promise<unknown>): Promise<SankhyaGatewayError
   expect(error).toBeInstanceOf(SankhyaGatewayError);
   return error as SankhyaGatewayError;
 }
+
+const CUSTOMER_COLUMNS = [...CUSTOMER_SPEC.columns];
 
 describe('real partner adapter: closed by default (flags stay closed)', () => {
   it('refuses every operation without any HTTP call when no customer switch was given', async () => {
@@ -338,12 +341,12 @@ describe('real partner adapter: state machine with the transport mock', () => {
     const { gateway, mock } = harness();
     const zero = cnpjWithLeadingZero();
     mock.forced.push(ok(
-      ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'CGC_CPF', 'ATIVO', 'BLOQUEAR', 'CODVEND', 'CODTAB', 'LIMCRED', 'LIMCREDMENSAL', 'MOTBLOQ', 'SITUACAO'],
-      [[900_001, 'TESTE FORCE', 'TESTE FORCE Ltda', zero.slice(1), 'S', 'N', 7, 5, null, null, null, null]],
+      CUSTOMER_COLUMNS,
+      [[900_001, 'TESTE FORCE', 'TESTE FORCE Ltda', zero.slice(1), 'S', 'N', 7, 5, null, null, null, null, null, null, null, null, null, null, null, null, null, null]],
     ));
     const partner = await gateway.readWrittenPartner(900_001);
     expect(partner).toMatchObject({ code: 900_001, document: zero, active: true, blocked: false, sellerCode: 7, priceTableCode: 5, creditLimit: null });
-    mock.forced.push(ok(['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'CGC_CPF', 'ATIVO', 'BLOQUEAR', 'CODVEND', 'CODTAB', 'LIMCRED', 'LIMCREDMENSAL', 'MOTBLOQ', 'SITUACAO'], []));
+    mock.forced.push(ok(CUSTOMER_COLUMNS, []));
     expect(await gateway.readWrittenPartner(900_002)).toBeNull();
   });
 

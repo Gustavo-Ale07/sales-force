@@ -40,8 +40,10 @@ import type {
   ErpOrderStatusReading,
   ErpOrderReleaseReading,
   ErpOrderStageReading,
+  ErpOrderEditReading,
 } from '../write/order-contract.js';
 import type { ConfirmOrderResult } from '../write/confirmar-nota.js';
+import type { DeleteOrderResult } from '../write/excluir-notas.js';
 import { FakeOrderBook } from './fake-order-book.js';
 import { assertSafeScope, customerExclusion, mobilityAllowed, selectEffectiveVersions } from '../read-scope.js';
 import { DEMO_CONFIGURATION } from './demo-configuration.js';
@@ -338,6 +340,14 @@ export class FakeGateway implements SankhyaGateway {
 
   confirmOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<ConfirmOrderResult> {
     return this.#order(options, () => this.#orders.confirm(erpOrderNumber));
+  }
+
+  deleteOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<DeleteOrderResult> {
+    return this.#order(options, () => this.#orders.delete(erpOrderNumber));
+  }
+
+  readOrderEditFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderEditReading[]> {
+    return this.#order(options, () => this.#orders.editFactsOf(erpOrderNumbers));
   }
 
   findOrderByOrigin(originField: string, originId: string, options?: OrderCallOptions): Promise<ErpOrderRef | null> {

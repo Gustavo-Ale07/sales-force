@@ -114,6 +114,12 @@ export const AUDIT_ACTIONS = {
   /** SNK-7 M1: an operator re-queued an already delivered order with the same idempotency key (ids and ERP number only). */
   orderErpResendRequested: 'order.erp_resend_requested',
   orderDeliveryVerifyRequested: 'order.delivery_verify_requested',
+  /** Owner ruling 2026-11-27 "Editar pedido": who asked to edit a sent order and the NUNOTA it replaces (ids and numbers only). */
+  orderEditRequested: 'order.edit_requested',
+  /** The worker deleted the old note in Sankhya and re-queued the edited order (old NUNOTA; the new one is on the following order.erp_sent). */
+  orderEditDeleted: 'order.edit_deleted',
+  /** The worker refused the edit after the live eligibility read (reason code only); nothing was deleted. */
+  orderEditRefused: 'order.edit_refused',
   /** RT-1: the ERP note is confirmed gone from Sankhya (two consecutive confirmed-absent reads): the order leaves the lists (ids and ERP number only). */
   orderErpRemoved: 'order.erp_removed',
   /** RT-1: a removed order's note came back in Sankhya: the order is visible again (ids and ERP number only). */

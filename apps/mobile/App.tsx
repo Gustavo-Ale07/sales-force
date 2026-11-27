@@ -16,7 +16,7 @@ import { AddServerScreen } from "./src/ui/add-server-screen";
 import { SplashView } from "./src/ui/brand";
 import { Shell } from "./src/ui/shell";
 import { UpdateGate } from "./src/ui/update-gate";
-import { installUpdate, startupUpdateCheck } from "./src/update/device-update";
+import { applyOtaOnLaunch, installUpdate, startupUpdateCheck } from "./src/update/device-update";
 
 // The native splash stays up until the first React frame is laid out, then hands over to the (identical) JS splash: no blank flash.
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -143,6 +143,9 @@ function useBoot(): { readonly boot: Boot; readonly resetLocalData: () => Promis
 
 export default function App() {
   const { boot, resetLocalData, submitCode } = useBoot();
+  useEffect(() => {
+    void applyOtaOnLaunch();
+  }, []);
   // Screens own their insets (header, bottom navigation, login); only the plain status screens need the wrapper.
   const safe = (content: React.ReactNode) => (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>

@@ -27,30 +27,13 @@ export const orderStatusLabels: Record<ApiSchema<"OrderStatus">, { label: string
 export function orderStatusView(
   order: { status: ApiSchema<"OrderStatus">; erpNumber?: number | null; updatedAt?: string },
   now: number = Date.now(),
-): { label: string; tone: Tone; hint: string } {
+): { label: string; tone: Tone } {
   const base = orderStatusLabels[order.status];
-  const hint = orderStatusHints[order.status];
   if (order.status === "queued" && isDeliveryOverdue({ updatedAt: order.updatedAt, now })) {
-    return {
-      label: "Aguardando envio",
-      tone: "warning",
-      hint: "O envio ao Sankhya está demorando. O Sales Force tenta de novo sozinho; não é preciso enviar outra vez.",
-    };
+    return { label: "Aguardando envio", tone: "warning" };
   }
-  return { ...base, hint };
+  return base;
 }
-
-/** One sentence per situation: what it says, and what it does not say about Sankhya. */
-export const orderStatusHints: Record<ApiSchema<"OrderStatus">, string> = {
-  draft: "Salvo no Sales Force. Ainda não foi enviado ao Sankhya.",
-  awaiting_approval: "O desconto deste pedido espera a aprovação de um gestor.",
-  approved: "O desconto foi aprovado. O pedido segue para o Sankhya.",
-  approval_rejected: "O desconto foi reprovado. Edite o pedido antes de enviá-lo de novo.",
-  queued: "O envio ao Sankhya está em andamento. O pedido ainda não existe no Sankhya.",
-  sent: "Este pedido foi enviado ao Sankhya.",
-  rejected: "Precisa de correção. Edite o pedido e confirme de novo.",
-  unknown: "O envio ao Sankhya está sendo conferido. Não envie de novo.",
-};
 
 export const noPriceReasonLabels: Record<ApiSchema<"NoPriceReason">, string> = {
   no_resolved_table: "Cliente sem tabela de preço resolvida",

@@ -14,6 +14,13 @@ export function replaceOrder(api: ApiClient, id: string, body: ReplaceOrderBody)
   return callApi(() => api.PUT("/orders/{id}", { params: { path: { id } }, body }));
 }
 
+export type EditOrderBody = ApiSchema<"EditOrderRequest">;
+
+/** EDIT-1: edits an order already sent to Sankhya; answers 200 with the order `queued` for the worker. */
+export function editOrder(api: ApiClient, id: string, body: EditOrderBody) {
+  return callApi(() => api.POST("/orders/{id}/edit", { params: { path: { id } }, body }));
+}
+
 export type ResolvePriceReviewBody = ApiSchema<"ResolvePriceReviewRequest">;
 
 /** P-09: accept or refuse each changed price; the server prices again and validates as a normal edit. */

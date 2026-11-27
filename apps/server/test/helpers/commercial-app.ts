@@ -16,6 +16,7 @@ export const TEST_DATASET = { environment: 'sandbox', datasetId: 'test-dataset-1
 const DATASET_GUARDED = [
   new RegExp('^POST /orders$'),
   new RegExp('^PUT /orders/[^/]+$'),
+  new RegExp('^POST /orders/[^/]+/edit$'),
   new RegExp('^POST /orders/[^/]+/price-review$'),
   new RegExp('^POST /customers/[^/]+/orders/repeat-last$'),
   new RegExp('^POST /orders/[^/]+/duplicate-as-order$'),

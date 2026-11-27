@@ -396,11 +396,32 @@ export function carrierSpec(tally?: Record<string, number>): EntitySpec<Carrier>
  * "none": whether 0 means no seller is a business rule). `BLOQUEAR` semantics were not measured: only
  * `S`/`N`/null are accepted, null = not blocked (NEEDS VALIDATION S4).
  */
+const CUSTOMER_BASE_COLUMNS = ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'CGC_CPF', 'ATIVO', 'BLOQUEAR', 'CODVEND', 'CODTAB', 'LIMCRED', 'LIMCREDMENSAL', 'MOTBLOQ', 'SITUACAO'];
+
+/**
+ * Registry columns (spike §9.70, Sandbox 2026-11-27): TGFPAR TELEFONE, EMAIL, CEP, NUMEND, COMPLEMENTO plus the names behind
+ * CODEND (TSIEND), CODBAI (TSIBAI) and CODCID/UF (TSICID, TSIUFS), read as correlated sub-selects (one row per partner, no join).
+ * CELULAR and the default carrier do not exist in TGFPAR and are not read.
+ */
+const CUSTOMER_REGISTRY_SELECT = [
+  'TELEFONE',
+  'EMAIL',
+  'CEP',
+  'NUMEND',
+  'COMPLEMENTO',
+  '(SELECT E.TIPO FROM TSIEND E WHERE E.CODEND = TGFPAR.CODEND AND E.CODEND > 0) AS STREETKIND',
+  '(SELECT E.NOMEEND FROM TSIEND E WHERE E.CODEND = TGFPAR.CODEND AND E.CODEND > 0) AS STREETNAME',
+  '(SELECT B.NOMEBAI FROM TSIBAI B WHERE B.CODBAI = TGFPAR.CODBAI AND B.CODBAI > 0) AS NEIGHBORHOOD',
+  '(SELECT C.NOMECID FROM TSICID C WHERE C.CODCID = TGFPAR.CODCID AND C.CODCID > 0) AS CITYNAME',
+  '(SELECT S.UF FROM TSIUFS S WHERE S.CODUF = (SELECT C.UF FROM TSICID C WHERE C.CODCID = TGFPAR.CODCID AND C.CODCID > 0)) AS STATEUF',
+];
+const CUSTOMER_REGISTRY_COLUMNS = ['TELEFONE', 'EMAIL', 'CEP', 'NUMEND', 'COMPLEMENTO', 'STREETKIND', 'STREETNAME', 'NEIGHBORHOOD', 'CITYNAME', 'STATEUF'];
+
 export const CUSTOMER_SPEC: EntitySpec<Customer> = {
   entity: 'customers',
   table: 'TGFPAR',
-  select: ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'CGC_CPF', 'ATIVO', 'BLOQUEAR', 'CODVEND', 'CODTAB', 'LIMCRED', 'LIMCREDMENSAL', 'MOTBLOQ', 'SITUACAO'],
-  columns: ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'CGC_CPF', 'ATIVO', 'BLOQUEAR', 'CODVEND', 'CODTAB', 'LIMCRED', 'LIMCREDMENSAL', 'MOTBLOQ', 'SITUACAO'],
+  select: [...CUSTOMER_BASE_COLUMNS, ...CUSTOMER_REGISTRY_SELECT],
+  columns: [...CUSTOMER_BASE_COLUMNS, ...CUSTOMER_REGISTRY_COLUMNS],
   // `CODPARC = 0` is the ERP placeholder row (flagged CLIENTE = 'S' in the Sandbox, 2026-09-30): never mirrored.
   where: "CLIENTE = 'S' AND CODPARC > 0",
   orderBy: 'CODPARC',
@@ -408,8 +429,24 @@ export const CUSTOMER_SPEC: EntitySpec<Customer> = {
     const tradeName = row.nullableText('NOMEPARC');
     const legalName = row.nullableText('RAZAOSOCIAL');
     const name = legalName ?? tradeName ?? row.text('NOMEPARC');
+    const streetName = row.nullableText('STREETNAME');
+    const streetKind = row.nullableText('STREETKIND');
+    const cep = row.nullableText('CEP');
+    const state = row.nullableText('STATEUF');
     return {
       code: row.int('CODPARC'),
+      registry: {
+        // CEP is VARCHAR2(8) and 519 Sandbox rows carry 7 digits (leading zero lost): restore it; anything else stays as recorded.
+        postalCode: cep === null ? null : /^\d{7}$/.test(cep) ? `0${cep}` : cep,
+        street: streetName === null ? null : streetKind === null ? streetName : `${streetKind} ${streetName}`,
+        number: row.nullableText('NUMEND'),
+        complement: row.nullableText('COMPLEMENTO'),
+        neighborhood: row.nullableText('NEIGHBORHOOD'),
+        city: row.nullableText('CITYNAME'),
+        state: state === null ? null : state.toUpperCase(),
+        phone: row.nullableText('TELEFONE'),
+        email: row.nullableText('EMAIL'),
+      },
       name,
       tradeName,
       document: row.nullableText('CGC_CPF'),

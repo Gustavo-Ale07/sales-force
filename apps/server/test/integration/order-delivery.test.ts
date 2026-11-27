@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AuditService } from '../../src/iam/audit.service.js';
 import { requeueDeliveredOrder, ResendRefused } from '../../src/integration/order-resend.js';
+import { enqueueOrderEdit, type OrderEditSnapshot } from '../../src/orders/order-edit.js';
 import { enqueueOrderDelivery, requestDeliveryVerification } from '../../src/orders/order-erp-delivery.js';
 import { MAX_DELIVERY_ATTEMPTS } from '../../src/integration/order-delivery.policy.js';
 import {
@@ -62,6 +63,7 @@ interface World {
   readonly book: FakeOrderBook;
   readonly service: OrderDeliveryService;
   readonly includes: OrderWriteRequest[];
+  readonly deletes: number[];
   seed(over?: SeedOptions): Promise<{ orderId: string; outboxId: string }>;
   advance(ms: number): void;
   /** The next `count` origin lookups answer "not found" even if the note exists (the ERP is still processing it). */
@@ -82,6 +84,7 @@ async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook;
   const book = options.book ?? new FakeOrderBook();
   const fake = new FakeGateway({ orders: book });
   const includes: OrderWriteRequest[] = [];
+  const deletes: number[] = [];
   const hidden = { finds: 0 };
   // Every delivery call stands for one HTTP request through the budgeted transport (M3), like the real gateway.
   const charge = budgetedTransport(async () => ({ status: 200, headers: {}, body: '' }));
@@ -111,6 +114,12 @@ async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook;
     readOrderStatusFacts: (numbers, o) => fake.readOrderStatusFacts(numbers, o),
     readOrderReleaseFacts: (numbers, o) => fake.readOrderReleaseFacts(numbers, o),
     readOrderStageFacts: (numbers, o) => fake.readOrderStageFacts(numbers, o),
+    readOrderEditFacts: (numbers, o) => fake.readOrderEditFacts(numbers, o),
+    deleteOrder: async (number, o) => {
+      await request();
+      deletes.push(number);
+      return fake.deleteOrder(number, o);
+    },
   };
   const now = () => new Date(clock.ms);
   const settings: OrderDeliverySettings = {
@@ -169,6 +178,7 @@ async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook;
     book,
     service,
     includes,
+    deletes,
     seed,
     advance: (ms) => {
       clock.ms += ms;
@@ -260,6 +270,40 @@ describe('dry run (D-6)', () => {
     expect(await w.outbox(outboxId)).toMatchObject({ status: 'rejected', lastErrorClass: 'validation' });
     expect((await w.order(orderId)).status).toBe('rejected');
     expect(await w.database.handle.db.select().from(integrationOrderDryRun)).toHaveLength(0);
+  });
+});
+
+describe('EDIT-1: the worker never inserts into the outbox (force_worker has no INSERT there)', () => {
+  it('without the order send_order row the edit is refused before any ERP call, nothing deleted, no row created', async () => {
+    const w = await world();
+    const { orderId, outboxId } = await w.seed();
+    const pool = w.database.handle.pool;
+    await pool.query(`DELETE FROM integration_outbox WHERE id = $1`, [outboxId]);
+    const editId = randomUUID();
+    const payload = {
+      edit: {
+        oldErpNumber: 4242,
+        previousStatus: 'sent',
+        actorAccountId: null,
+        operator: 'os:tester',
+        snapshot: {
+          header: { customerCode: 77, sellerCode: 9, negotiationTypeCode: 11, topCode: null, carrierCode: null, freightType: 'FOB', discountAboveLimitAccepted: false, notes: null, estimatedTotal: '0', discountAuthority: 'seller', configVersionId: randomUUID() },
+          items: [],
+        },
+      },
+    };
+    await pool.query(
+      `INSERT INTO integration_outbox (id, aggregate_type, aggregate_id, operation, payload, origin_id, status, next_attempt_at, created_at)
+       VALUES ($1, 'sales_order', $2, 'edit_order', $3::jsonb, $4, 'pending', '2000-01-01', '2000-01-01')`,
+      [editId, orderId, JSON.stringify(payload), `edit:${randomUUID()}`],
+    );
+    await w.service.runDue();
+    expect(w.deletes).toHaveLength(0);
+    expect(await w.outbox(editId)).toMatchObject({ status: 'rejected' });
+    expect((await w.outbox(editId)).lastErrorMessage).toContain('send_row_missing');
+    expect((await w.order(orderId)).status).toBe('sent');
+    const sends = await pool.query(`SELECT 1 FROM integration_outbox WHERE aggregate_id = $1 AND operation = 'send_order'`, [orderId]);
+    expect(sends.rowCount).toBe(0);
   });
 });
 
@@ -731,5 +775,91 @@ describe('live delivery', () => {
     expect(w.book.count('include')).toBe(3);
     expect(w.book.orders).toHaveLength(3);
     for (const { orderId } of ids) expect((await w.order(orderId)).status).toBe('sent');
+  });
+});
+
+describe('Editar pedido (2026-11-27): delete the unconfirmed note and recreate it', () => {
+  const snapshot = (configVersionId: string): OrderEditSnapshot => ({
+    header: {
+      customerCode: 77, sellerCode: 9, negotiationTypeCode: 11, topCode: 1001, carrierCode: null, freightType: 'FOB',
+      discountAboveLimitAccepted: false, notes: 'Editado', estimatedTotal: '20.00', discountAuthority: 'within_authority', configVersionId,
+    },
+    items: [
+      { lineNo: 1, productCode: 4158, productDescription: 'P', unit: 'PT', quantity: '2', unitListPrice: '10', priceState: 'priced', priceTableCode: 1, priceVersionId: 1, discountPercent: '0', estimatedLineTotal: '20.00' },
+    ],
+  });
+
+  async function sentWorld() {
+    const w = await world();
+    const { orderId, outboxId } = await w.seed();
+    await w.service.runDue();
+    const sent = await w.order(orderId);
+    expect(sent.status).toBe('sent');
+    const edit = async (clientRequestId = randomUUID()) => {
+      const db = w.database.handle.db;
+      const current = await w.order(orderId);
+      const actor = current.createdByAccountId;
+      const result = await db.transaction((tx) => enqueueOrderEdit(tx, current, { clientRequestId, actorAccountId: actor, snapshot: snapshot(current.configVersionId ?? randomUUID()) }, new Date(START)));
+      return result;
+    };
+    return { w, orderId, outboxId, oldNumber: sent.erpNumber as number, edit };
+  }
+
+  it('deletes the old note once, recreates it with the same origin id and keeps the old NUNOTA in the history', async () => {
+    const { w, orderId, outboxId, oldNumber, edit } = await sentWorld();
+    expect((await edit()).kind).toBe('queued');
+    await w.service.runDue();
+    expect(w.deletes).toEqual([oldNumber]);
+    expect(w.book.orders).toHaveLength(1);
+    expect(w.book.orders[0]?.request.originId).toBe(orderId);
+    expect(w.book.orders[0]?.erpOrderNumber).not.toBe(oldNumber);
+    const order = await w.order(orderId);
+    expect(order).toMatchObject({ status: 'sent', erpNumber: w.book.orders[0]?.erpOrderNumber, notes: 'Editado' });
+    expect(await w.outbox(outboxId)).toMatchObject({ status: 'confirmed' });
+    const history = await w.database.handle.pool.query('SELECT erp_number FROM sales_order_erp_history WHERE order_id = $1', [orderId]);
+    expect(history.rows.map((r: { erp_number: number }) => Number(r.erp_number))).toEqual([oldNumber]);
+    const sentAudit = await w.database.handle.db.select().from(auditLog).where(eq(auditLog.action, 'order.erp_sent'));
+    expect(sentAudit.some((a) => (a.detail as Record<string, unknown> | null)?.previousErpOrderNumber === oldNumber)).toBe(true);
+    // Repeated sweeps never delete or include again.
+    await w.service.runDue();
+    expect(w.deletes).toHaveLength(1);
+    expect(w.book.count('include')).toBe(2);
+  });
+
+  it('refuses without deleting when the note was confirmed in the ERP meanwhile; the order goes back to sent', async () => {
+    const { w, orderId, oldNumber, edit } = await sentWorld();
+    await edit();
+    const stored = w.book.orders.find((o) => o.erpOrderNumber === oldNumber);
+    if (stored === undefined) throw new Error('note missing');
+    stored.confirmed = true;
+    await w.service.runDue();
+    expect(w.deletes).toHaveLength(0);
+    expect(w.book.orders).toHaveLength(1);
+    expect(await w.order(orderId)).toMatchObject({ status: 'sent', erpNumber: oldNumber });
+    const refused = await w.database.handle.db.select().from(auditLog).where(eq(auditLog.action, 'order.edit_refused'));
+    expect(refused).toHaveLength(1);
+  });
+
+  it('resumes after a delete whose answer was lost: never deletes twice, recreates', async () => {
+    const { w, orderId, oldNumber, edit } = await sentWorld();
+    w.book.script('delete', { kind: 'created_then_error', error: err('temporary') });
+    await edit();
+    await w.service.runDue();
+    // First attempt: note gone but the call failed -> retry later.
+    w.advance(3600_000);
+    await w.service.runDue();
+    expect(w.deletes).toEqual([oldNumber]);
+    expect(w.book.orders).toHaveLength(1);
+    expect(await w.order(orderId)).toMatchObject({ status: 'sent', notes: 'Editado' });
+    expect(await w.order(orderId).then((o) => o.erpNumber)).not.toBe(oldNumber);
+  });
+
+  it('a permanent rejection of the recreation after the delete lands the order in rejected (re-editable)', async () => {
+    const { w, orderId, edit } = await sentWorld();
+    w.book.script('include', { kind: 'error', error: err('validation', 'erp_rejected') });
+    await edit();
+    await w.service.runDue();
+    expect(w.book.orders).toHaveLength(0);
+    expect(await w.order(orderId)).toMatchObject({ status: 'rejected', erpNumber: null });
   });
 });

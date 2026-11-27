@@ -77,6 +77,14 @@ export class OrdersController {
     return this.orders.replace(user, contract.params.id, contract.body);
   }
 
+  @ApiRoute(routes.editOrder)
+  edit(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.editOrder>,
+  ): Promise<OrderDetail> {
+    return this.orders.edit(user, contract.params.id, contract.body);
+  }
+
   @ApiRoute(routes.deleteOrder)
   remove(
     @CurrentUserParam() user: CurrentUser,

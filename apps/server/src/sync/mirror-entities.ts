@@ -265,6 +265,20 @@ const customers: MirrorEntitySpec = {
         monthlyCreditLimit: decimalColumn('customers', 'monthlyCreditLimit', row.monthlyCreditLimit ?? null, 14, 2),
         blockReason: row.blockReason ?? null,
         situation: row.situation ?? null,
+        // Registry data (spike §9.70) only when the source provided it; a source without it leaves the columns untouched.
+        ...(row.registry === undefined
+          ? {}
+          : {
+              phone: row.registry.phone,
+              email: row.registry.email,
+              city: row.registry.city,
+              state: row.registry.state,
+              postalCode: row.registry.postalCode,
+              street: row.registry.street,
+              addressNumber: row.registry.number,
+              complement: row.registry.complement,
+              neighborhood: row.registry.neighborhood,
+            }),
       },
     })),
 };

@@ -137,7 +137,7 @@ Esta secao prevalece sobre as tabelas acima onde divergirem (elas sao da auditor
 - Metas (linha geral OU soma dos produtos; migracao 0061) e positivacao (via TGFVAR; migracao 0062): GOL-1 e GOL-2 no servidor.
 
 **PENDENTE**
-- Editar pedido: so Duplicar; falta servico de recalculo de totais/financeiro do Sankhya (`sankhya-spike.md` §9.67).
+- Editar pedido: implementado como apagar e recriar (EDIT-1, `sankhya-spike.md` §9.69); prova real no Sandbox (2512/2513) pendente do deploy.
 - Busca global no app.
 - APK 0.3.0 publicado em /downloads: arquivos prontos; falta permissao de escrita em `/opt/force-staging/downloads` (pasta de root). (A flag `SF_ALLOW_LEGACY_APP_LOGIN` foi removida por SRV-1.)
 - Tela `/configuracoes` ainda diz "Edite no Sankhya": contradiz CFG-9; trocar o texto.

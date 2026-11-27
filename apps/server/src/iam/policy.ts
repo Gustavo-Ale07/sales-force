@@ -138,6 +138,8 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   createOrder: { roles: EVERY_ROLE },
   getOrder: { roles: EVERY_ROLE },
   replaceOrder: { roles: EVERY_ROLE },
+  /** Owner ruling 2026-11-27 "Editar pedido": scope (own orders for a representative) is enforced by the service, as for replaceOrder. */
+  editOrder: { roles: EVERY_ROLE },
   getOrderPriceReview: { roles: EVERY_ROLE },
   resolveOrderPriceReview: { roles: EVERY_ROLE },
   deleteOrder: { roles: EVERY_ROLE },

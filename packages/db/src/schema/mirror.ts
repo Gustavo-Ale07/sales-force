@@ -323,6 +323,12 @@ export const erpCustomer = pgTable(
     phone: text('phone'),
     city: text('city'),
     state: text('state'),
+    /** Registry data for the order PDF (spike §9.70), as the ERP records it; NULL = not reported. */
+    postalCode: text('postal_code'),
+    street: text('street'),
+    addressNumber: text('address_number'),
+    complement: text('complement'),
+    neighborhood: text('neighborhood'),
     sellerCode: integer('seller_code'),
     /** NULL = "no resolved price table" (never coerced to a default table). */
     priceTableCode: integer('price_table_code'),

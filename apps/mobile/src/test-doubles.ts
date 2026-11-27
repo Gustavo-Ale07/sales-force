@@ -137,6 +137,8 @@ export function fakeOrders(overrides: Partial<OrderRepository> = {}): OrderRepos
     get: async (id: string) => orderDetail({ id }),
     replace: async (id: string, request) =>
       orderDetail({ id, customerCode: request.customerCode, negotiationTypeCode: request.negotiationTypeCode, notes: request.notes, version: request.expectedVersion + 1 }),
+    edit: async (id: string, request) =>
+      orderDetail({ id, customerCode: request.customerCode, negotiationTypeCode: request.negotiationTypeCode, notes: request.notes, version: request.expectedVersion + 1, status: "queued" }),
     duplicateAsOrder: async () => {
       throw new Error("unused");
     },

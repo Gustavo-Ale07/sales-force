@@ -1,5 +1,6 @@
 import type { DecimalString } from '@salesforce/domain';
 import type { ConfirmOrderResult } from './confirmar-nota.js';
+import type { DeleteOrderResult } from './excluir-notas.js';
 
 /**
  * Order delivery contract (SNK-7). Everything the worker hands to the gateway is already resolved from
@@ -100,6 +101,28 @@ export interface SankhyaWritePort {
    * refusal throws a `validation` error with the readable reason. Never re-includes.
    */
   confirmOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<ConfirmOrderResult>;
+  /**
+   * Edit = delete and recreate (owner ruling 2026-11-27): CACSP.excluirNotas on an UNCONFIRMED order (F-51). NEVER called
+   * before the worker re-read `readOrderEditFacts` live and `canEditOrder` allowed it. Refused by the ERP = `validation`.
+   */
+  deleteOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<DeleteOrderResult>;
+}
+
+/**
+ * Facts the edit predicate (`canEditOrder`, domain) is evaluated from. Read live by the worker right before a delete (SELECT only):
+ * header (TGFCAB), release lines (TSILIB), the invoicing link (TGFVAR) and the financial records (TGFFIN). `hasDefinitiveFinancial`
+ * is true for a title that is not the PROVISIONAL one an unconfirmed order already carries (PROVISAO <> 'S', or settled: DHBAIXA
+ * filled); that reading of "financeiro gerado" awaits the owner's confirmation (spike §9.69).
+ */
+export interface ErpOrderEditReading {
+  readonly erpOrderNumber: number;
+  /** The note exists in TGFCAB. */
+  readonly found: boolean;
+  readonly statusNota: string | null;
+  readonly orderCargo: number | null;
+  readonly hasReleaseLines: boolean;
+  readonly hasInvoiceLink: boolean;
+  readonly hasDefinitiveFinancial: boolean;
 }
 
 /**
@@ -224,6 +247,8 @@ export interface ErpOrderStageReading {
 export interface SankhyaOrderReadPort {
   /** Stage facts (read-only, batched by note number): one entry per requested number. */
   readOrderStageFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderStageReading[]>;
+  /** Edit eligibility facts (read-only, live, batched): one entry per requested number, `found` false when TGFCAB has none. */
+  readOrderEditFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderEditReading[]>;
   /** Release state source (read-only): one entry per requested number, `found` false when TGFCAB has none. */
   readOrderReleaseFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderReleaseReading[]>;
   /** Status facts of already sent orders (P2); one entry per requested number, `found` false when the ERP has none. */

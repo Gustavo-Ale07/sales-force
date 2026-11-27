@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
   CreateOrderRequest,
+  EditOrderRequest,
   CustomerOrderHabits,
   DatasetIdentity,
   DiscountAuthorityStatus,
@@ -13,6 +14,7 @@ import type {
   ReplaceOrderRequest,
 } from '@salesforce/contracts';
 import {
+  canEditFromStage,
   customerOrderBlock,
   datasetOriginForConfigurationSource,
   discountAuthorityModeOf,
@@ -50,6 +52,7 @@ import type { DbHandle } from '@salesforce/db';
 import { DraftBuilder, PRODUCT_WITHOUT_MOBILITY_MESSAGE, PRODUCT_WITHOUT_PRICE_MESSAGE, type DraftOutcome, type SendBlock } from './draft-builder.js';
 import { assertEligibleForErpSubmission } from './erp-eligibility.guard.js';
 import { deleteOrderDeliveries, enqueueOrderDelivery, requestDeliveryVerification, requeueRejectedDelivery } from './order-erp-delivery.js';
+import { enqueueOrderEdit, findEditCommandOrder, type OrderEditSnapshot } from './order-edit.js';
 import { orderFingerprint } from './order-fingerprint.js';
 import { InstallationConfigurationService } from '../configuration/configuration.service.js';
 import { erpDeliveryOf, freightTypeOf, listGrandTotal, toOrderApproval, toOrderDetail, toOrderListItem } from './order.mapper.js';
@@ -614,6 +617,129 @@ export class OrdersService {
       return row;
     });
     return this.detailOf(updated);
+  }
+
+  /**
+   * "Editar pedido" (owner ruling 2026-11-27): an order already in Sankhya is edited by deleting its UNCONFIRMED note and
+   * recreating it. Everything a creation checks is checked again here (scope, customer, TOP/carrier, prices, discount authority,
+   * header); the API only records the command and the priced snapshot in the outbox (`edit_order`). The worker revalidates the
+   * eligibility live, deletes the old note and applies the snapshot (a refused edit leaves the order untouched).
+   * Idempotent per `clientRequestId`: a repeated tap answers the current state and queues nothing new.
+   */
+  async edit(user: CurrentUser, id: string, body: EditOrderRequest): Promise<OrderDetail> {
+    assertDatasetMatches(this.dataset, body.expectedDataset);
+    const context = await this.policy.accessContext(user);
+    const current = await this.loadVisible(context.scope, id);
+    const recorded = await findEditCommandOrder(this.handle.db, body.clientRequestId);
+    if (recorded !== null) {
+      // The same tap again (or the app repeating a request whose answer was lost). Another order's key is simply unusable.
+      if (recorded !== id) throw new AppError('idempotency_conflict');
+      return this.detailOf(current, false, context.configuration);
+    }
+    if (current.status === 'queued' || current.status === 'unknown') {
+      throw new AppError('conflict', { message: 'O pedido está em envio ao Sankhya. Aguarde para editar.', details: { reason: 'delivery_in_progress' } });
+    }
+    if (current.status !== 'sent' && current.status !== 'rejected') throw new AppError('order_not_editable');
+    if (current.version !== body.expectedVersion) throw new AppError('version_conflict', { details: { currentVersion: current.version } });
+    assertOriginMatchesConfiguration(current.datasetOrigin, context.configuration.source.kind);
+    if (!this.enqueueEnabled) throw new AppError('erp_submission_disabled');
+
+    // Mirror hint only (the worker decides live, fail-closed): an order the Force already knows is confirmed or further is refused now.
+    const stage = current.erpNumber === null ? null : await this.orders.erpStageOf(current.id);
+    if (!canEditFromStage(stage === null ? null : { code: stage.stage }, current.erpNumber !== null, current.status)) {
+      throw new AppError('conflict', {
+        message: 'Este pedido já foi confirmado ou avançou no Sankhya e não pode mais ser editado. Use Duplicar.',
+        details: { reason: 'not_editable_in_erp' },
+      });
+    }
+    if (current.status === 'rejected' && current.erpNumber === null) {
+      const last = await this.orders.lastDeliveryErrorOf(current.id);
+      if (erpDeliveryOf(current.status, last?.errorClass ?? null, last?.message ?? null)?.errorCode === 'ambiguous_origin') {
+        throw new AppError('conflict', { message: 'Há mais de uma nota com este pedido no Sankhya. Peça à TI para conferir.', details: { reason: 'ambiguous_origin' } });
+      }
+    }
+
+    const customer = await this.customers.requireForOrder(context.scope, body.customerCode);
+    assertCustomerEligible(customer);
+    const requestedTop = body.topCode === undefined ? undefined : this.resolveTop(context.configuration, body.topCode);
+    const requestedCarrier = await this.resolveCarrier(body.carrierCode);
+    const draft = await this.buildValid(context, customer, body);
+    const topCode = requestedTop === undefined ? current.topCode : requestedTop;
+    const carrierCode = requestedCarrier === undefined ? current.carrierCode : requestedCarrier;
+    const freightType = body.freightType === undefined ? current.freightType : body.freightType;
+
+    const headerIssues = headerEligibilityIssues({ topCode, negotiationTypeCode: body.negotiationTypeCode }, context.configuration);
+    if (headerIssues.length > 0) throw headerNotEligibleError(headerIssues);
+    const issues = [
+      ...orderHeaderIssues({ topCode, negotiationTypeCode: body.negotiationTypeCode, freightType: freightTypeOf(freightType), carrierCode }).map((code) => ({ path: HEADER_ISSUE_PATH[code], code })),
+      ...orderErpIssues(
+        draft.draft.items.map((item) => ({ lineNo: item.lineNo, discountPercent: normalizeDecimalString(item.discountPercent), priceState: item.priceState, unit: item.unit })),
+      ).map((issue) => ({ path: issue.lineNo === 0 ? 'items' : `items.${issue.lineNo}`, code: issue.code })),
+    ];
+    if (issues.length > 0) throw new AppError('validation_failed', { details: { issues } });
+
+    // Discount authority of the owner's role, as in a first send (force mode only; in erp mode the ERP decides).
+    const ownerRole = await this.ownerRoleOf(current);
+    const authority = recomputeOrderAuthority(draft.draft.items, ownerRole, context.configuration.sales.discountAuthority);
+    if (discountAuthorityModeOf(context.configuration.sales.discountAuthority) === 'force') {
+      if (authority.status === 'blocked') throw new AppError('discount_blocked', { details: { reason: authority.reason } });
+      if (authority.level !== null) {
+        throw new AppError('conflict', {
+          message: 'O desconto deste pedido agora exige aprovação. Exclua o pedido e confirme um novo.',
+          details: { reason: 'approval_required_before_resend' },
+        });
+      }
+    }
+
+    const at = this.clock();
+    const snapshot: OrderEditSnapshot = {
+      header: {
+        customerCode: customer.code,
+        sellerCode: customer.sellerCode,
+        negotiationTypeCode: body.negotiationTypeCode,
+        topCode,
+        carrierCode,
+        freightType,
+        discountAboveLimitAccepted: body.discountAboveLimitAccepted === undefined ? current.discountAboveLimitAccepted : body.discountAboveLimitAccepted,
+        notes: body.notes,
+        estimatedTotal: draft.totals.estimatedTotal,
+        discountAuthority: authority.status,
+        configVersionId: context.configVersionId,
+      },
+      items: draft.draft.items.map((item) => ({
+        lineNo: item.lineNo,
+        productCode: item.productCode,
+        productDescription: item.productDescription,
+        unit: item.unit,
+        quantity: item.quantity,
+        unitListPrice: item.unitListPrice,
+        priceState: item.priceState,
+        priceTableCode: item.priceTableCode,
+        priceVersionId: item.priceVersionId,
+        discountPercent: item.discountPercent,
+        estimatedLineTotal: item.estimatedLineTotal,
+      })),
+    };
+
+    const result = await this.orders.transaction(async (tx) => {
+      const locked = await this.orders.findById(id, tx, true);
+      this.assertInScope(context.scope, locked);
+      if (locked.status !== current.status || locked.version !== current.version || locked.erpNumber !== current.erpNumber) {
+        throw new AppError('version_conflict', { details: { currentVersion: locked.version } });
+      }
+      const queued = await enqueueOrderEdit(tx, locked, { clientRequestId: body.clientRequestId, actorAccountId: user.accountId, snapshot }, at);
+      if (queued.kind === 'replay') return locked;
+      await this.audit.record(
+        {
+          action: AUDIT_ACTIONS.orderEditRequested,
+          actorAccountId: user.accountId,
+          detail: { ...this.auditDetail(queued.order, snapshot.items.length), ...(locked.erpNumber === null ? {} : { oldErpNumber: locked.erpNumber }), previousStatus: locked.status },
+        },
+        tx,
+      );
+      return queued.order;
+    });
+    return this.detailOf(result, false, context.configuration);
   }
 
   /**

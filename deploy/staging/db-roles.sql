@@ -58,9 +58,10 @@
 --                                           row lock. Smallest grant that satisfies it; no other erp_* column is writable by the API.
 --   product_media                         S           S I U D     worker product-photo job writes metadata (DELETE: orphan cleanup); API reads it to serve photos
 --   sales_order                           S I U D     -              orders.repository (status moves are UPDATEs; DELETE only for an order that never reached Sankhya, D-Y)
---   sales_order_item                      S I U D     -              orders.repository (lines are replaced: DELETE + INSERT)
+--   sales_order_item                      S I U D     S I   D      orders.repository (lines are replaced: DELETE + INSERT)
 --   sales_order_approval                  S I U       -              orders approvals (discount approval requests: INSERT on submit, UPDATE on decision or invalidation; never deleted)
---   sales_order_erp_stage                 S           S I U       worker writes the last known Sankhya stage of a delivered order (cascades with the order); API reads it for the order DTO
+--   sales_order_erp_stage                 S           S I U D       worker writes the last known Sankhya stage of a delivered order (cascades with the order); API reads it for the order DTO
+--   sales_order_erp_history               S           S I          worker records each NUNOTA replaced by an order edit (delete and recreate, 0065); API reads it for the order DTO
 --   sales_order_release_pending           S           S I U D     worker mirrors the pending Sankhya release lines (release queue; DELETE when a line is released); API reads it for the queue
 --   customer_order_template               S I U       -              templates.repository
 --   customer_order_template_item          S I U D     -              templates.repository (items replaced)
@@ -265,6 +266,7 @@ BEGIN
       ('sales_order',                        'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('sales_order_approval',               'force_api',    'SELECT, INSERT, UPDATE'),
       ('sales_order_erp_stage',              'force_api',    'SELECT'),
+      ('sales_order_erp_history',            'force_api',    'SELECT'),
       ('sales_order_release_pending',        'force_api',    'SELECT'),
       ('integration_outbox',               'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('customer_order_template',            'force_api',    'SELECT, INSERT, UPDATE'),
@@ -310,8 +312,9 @@ BEGIN
       ('integration_outbox',                 'force_worker', 'SELECT, UPDATE'),
       ('integration_order_dry_run',          'force_worker', 'SELECT, INSERT, DELETE'),
       ('sales_order',                        'force_worker', 'SELECT, UPDATE'),
-      ('sales_order_item',                   'force_worker', 'SELECT'),
-      ('sales_order_erp_stage',              'force_worker', 'SELECT, INSERT, UPDATE'),
+      ('sales_order_item',                   'force_worker', 'SELECT, INSERT, DELETE'),
+      ('sales_order_erp_stage',              'force_worker', 'SELECT, INSERT, UPDATE, DELETE'),
+      ('sales_order_erp_history',            'force_worker', 'SELECT, INSERT'),
       ('sales_order_release_pending',        'force_worker', 'SELECT, INSERT, UPDATE, DELETE'),
       ('audit_log',                          'force_worker', 'INSERT'),
       ('sync_state',                         'force_worker', 'SELECT, INSERT, UPDATE'),

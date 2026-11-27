@@ -54,7 +54,7 @@ import { PrintOrderButton } from "../components/print-order-button";
 import { QueryError } from "../components/query-error";
 import { SaveTemplateDialog } from "../components/save-template-dialog";
 import { ApiRequestError } from "../lib/api";
-import { ERP_SUBMISSION_DISABLED, convertQuote, createOrder, replaceOrder, submitOrder, verifyOrderDelivery } from "../lib/api-mutations";
+import { ERP_SUBMISSION_DISABLED, convertQuote, createOrder, editOrder, replaceOrder, submitOrder, verifyOrderDelivery } from "../lib/api-mutations";
 import { errorStatus } from "../lib/http-error";
 import { useRefreshOrdersInView } from "../lib/realtime";
 import { carriersQueryOptions, myDiscountLimitsQueryOptions, productGroupsQueryOptions, orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, productQueryOptions, queryKeys } from "../lib/api-queries";
@@ -64,7 +64,7 @@ import { approvalsEnabled } from "../lib/discount-authority";
 import { describeApiError, submitConflictText } from "../lib/error-message";
 import { ErpStageChip, ErpStagePanel } from "../components/order-stage";
 import { ErpBillingBadge, ErpReleaseBadge, OrderStatusBadge } from "../components/order-status-badges";
-import { deliveryErrorText, erpBillingItemText, erpBillingText, erpNoteDiverged, erpNoteDivergedText, erpReleaseEventText, erpReleaseMessages, erpStatusText, orderReference, orderReviewLabel, orderReviewReasons, orderStatusView } from "../lib/labels";
+import { erpBillingItemText, erpBillingText, erpReleaseEventText, erpReleaseMessages, erpStatusText, orderReference, orderReviewLabel, orderReviewReasons, orderStatusView } from "../lib/labels";
 import {
   describeIssue,
   issuesByLine,
@@ -138,6 +138,9 @@ function describeSaveFailure(error: unknown): FailureView {
         correlationId: error.correlationId,
         reloadable: true,
       };
+    }
+    if (error.code === "not_editable_in_erp") {
+      return { title: "Não foi possível editar", messages: ["Este pedido não pode mais ser editado."], correlationId: error.correlationId, reloadable: true };
     }
     if (error.code === "order_not_editable") {
       return {
@@ -239,7 +242,10 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
   const config = useQuery(orderEntryConfigurationQueryOptions(api));
   const loadedDataset = useLoadedDataset();
 
-  const readOnly = order !== null && (!EDITABLE_STATUSES.has(order.status) || (order.status === "rejected" && order.erpNumber !== null));
+  const baseReadOnly = order !== null && (!EDITABLE_STATUSES.has(order.status) || (order.status === "rejected" && order.erpNumber !== null));
+  // EDIT-1: "Editar" unlocks this editor for an order already in Sankhya; confirming calls editOrder, never replaceOrder.
+  const [editing, setEditing] = useState(false);
+  const readOnly = baseReadOnly && !editing;
   const lineCounter = useRef(0);
   const nextKey = () => `line-${(lineCounter.current += 1)}`;
 
@@ -396,22 +402,6 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
     items: toRequestItems(lines),
   };
 
-  // D-AA "Reenviar": a terminal failure goes back to the worker (same delivery record, the ERP is asked by origin first).
-  const resend = useMutation({
-    mutationFn: async () => {
-      if (!order) throw new Error("O documento precisa estar salvo.");
-      return submitOrder(api, order.id);
-    },
-    onSuccess: async (result) => {
-      if (result) queryClient.setQueryData(queryKeys.order(result.id), result);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.ordersAll });
-      toast({ title: "Reenviando ao Sankhya", description: order ? orderReference(order, docKind) : undefined, tone: "success" });
-    },
-    onError: (error) => {
-      toast({ title: "Não foi possível reenviar", description: submitConflictText(error) ?? describeApiError(error, "Tente novamente em instantes").description, tone: "danger" });
-    },
-  });
-
   // "Verificar agora": same delivery record, the worker asks Sankhya by origin before anything else (no second send).
   const verifyNow = useMutation({
     mutationFn: async () => {
@@ -435,6 +425,13 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
       // The dataset this editor loaded under; unknown identity blocks the write before any request.
       const expectedDataset = requireDataset(loadedDataset);
       let saved: OrderDetail;
+      if (order && editing) {
+        // One idempotency key per distinct payload: a repeated tap resends the same id.
+        const payload = JSON.stringify(body);
+        if (requestIdRef.current?.payload !== payload) requestIdRef.current = { payload, id: newUuid() };
+        const edited = await editOrder(api, order.id, { clientRequestId: requestIdRef.current.id, expectedVersion: order.version, expectedDataset, ...body });
+        return { saved: edited, sent: edited, sendError: null, mode };
+      }
       if (order && !dirty) saved = order; // saved before but never sent (switch off, failure): only the sending is repeated
       else if (order) saved = await replaceOrder(api, order.id, { expectedVersion: order.version, expectedDataset, ...body });
       else {
@@ -534,7 +531,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
     ...(dirty ? [] : sendBlocks.filter((block) => block.lineNo === index + 1).map((block) => block.message)),
     ...(saveIssuesByLine.get(index) ?? []),
   ];
-  const canSave = !readOnly && customer !== null && preview.valid && installationEnabled && !hasBlockedLines && !sendBlocked && (order === null || dirty || (order.status === "draft" && order.review === null));
+  const canSave = !readOnly && customer !== null && preview.valid && installationEnabled && !hasBlockedLines && !sendBlocked && (order === null || dirty || editing ||(order.status === "draft" && order.review === null));
   // Shared rule (site, app, server): TOP, negotiation, freight and carrier are mandatory; saving here also sends.
   const headerIssues = orderHeaderIssues({ topCode: orderTopCode, negotiationTypeCode, freightType, carrierCode: carrierChoice });
   const [headerAttempted, setHeaderAttempted] = useState(false);
@@ -821,6 +818,11 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                   Converter em pedido
                 </Button>
               ) : null}
+              {order.canEdit === true && !editing ? (
+                <Button type="button" variant="secondary" onClick={() => setEditing(true)}>
+                  Editar
+                </Button>
+              ) : null}
               {isQuotation ? <DuplicateAsOrderButton order={order} disabled={dirty} /> : <DuplicateOrderButton order={order} disabled={dirty} />}
             </>
           ) : undefined
@@ -844,46 +846,17 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
       ) : null}
       {order?.status === "unknown" ? (
         <Alert tone="info" title="Conferindo envio">
-          {order.erpNumber == null
-            ? "O envio ao Sankhya está sendo conferido. Não envie de novo."
-            : "O pedido já está no Sankhya; falta só a leitura final. Isso se resolve sozinho em instantes."}
-          <div className="mt-2">
-            <Button type="button" variant="secondary" loading={verifyNow.isPending} onClick={() => verifyNow.mutate()}>
-              Verificar agora
-            </Button>
-          </div>
-        </Alert>
-      ) : null}
-      {order?.status === "rejected" ? (
-        <Alert tone="danger" title="Motivo da falha no envio">
-          {deliveryErrorText(order.erpDelivery) ?? "Falha no envio. O pedido não foi criado no Sankhya."}
-          {order.erpDelivery?.errorCode === "ambiguous_origin" ? (
-            // K2: reenviar could make it worse; only IT can check which note is the right one. Excluir stays available.
-            <div className="mt-2">A TI precisa conferir no Sankhya antes de qualquer novo envio. O reenvio está bloqueado para este pedido.</div>
-          ) : erpNoteDiverged(order) ? (
-            <div className="mt-2">{erpNoteDivergedText(order.erpNumber as number)}</div>
-          ) : (
-            <div className="mt-2">
-              <Button type="button" variant="secondary" loading={resend.isPending} onClick={() => resend.mutate()}>
-                Reenviar
-              </Button>
-            </div>
-          )}
+          <Button type="button" variant="secondary" loading={verifyNow.isPending} onClick={() => verifyNow.mutate()}>
+            Verificar agora
+          </Button>
         </Alert>
       ) : null}
       {order?.convertedInto ? (
-        <Alert tone="info" title={order.convertedInto.erpNumber != null ? `CONVERTIDO EM PEDIDO nº ${order.convertedInto.erpNumber}` : "CONVERTIDO EM PEDIDO"}>
-          Este orçamento originou um pedido no Sales Force. No Sankhya o orçamento continua como está: não há vínculo entre os dois documentos.
-        </Alert>
+        <Alert tone="info" title={order.convertedInto.erpNumber != null ? `CONVERTIDO EM PEDIDO nº ${order.convertedInto.erpNumber}` : "CONVERTIDO EM PEDIDO"} />
       ) : null}
       {order?.status === "draft" && order.dryRun ? (
         <Alert tone="info" title="Simulado, não enviado">
           Simulado em {new Date(order.dryRun.at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} — não enviado ao Sankhya (assinatura {order.dryRun.payloadHash.slice(0, 12)}). Para enviar de verdade, confirme o pedido de novo quando o envio estiver ligado.
-        </Alert>
-      ) : null}
-      {readOnly ? (
-        <Alert tone="info" title="Somente leitura">
-          Este pedido está como “{status?.label}” e não pode mais ser editado.
         </Alert>
       ) : null}
       {save.isError ? <FailureAlert failure={describeSaveFailure(save.error)} onReload={order ? reload : undefined} /> : null}

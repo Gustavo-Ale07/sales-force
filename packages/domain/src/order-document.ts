@@ -21,6 +21,10 @@ export interface OrderDocumentSource {
   readonly erpNumber: number | null;
   readonly customerCode: number;
   readonly customerName: string;
+  /** Registry data of the customer for the seller to double-check when sending; absent = every field shows a dash. */
+  readonly customerRegistry?: OrderDocumentCustomerRegistry;
+  /** Carrier name already resolved with `resolveDocumentCarrier`; absent/null = a dash. */
+  readonly carrierName?: string | null;
   /** Human state label chosen by the caller (user text says "Sankhya", never "ERP": D-L). */
   readonly statusLabel: string;
   readonly createdAt: string;
@@ -55,6 +59,73 @@ export interface OrderDocumentSource {
 }
 
 export type OrderDocumentModel = OrderDocumentSource;
+
+/** Registry data printed in the customer block. Every field may be missing (null/undefined/blank = a dash). */
+export interface OrderDocumentCustomerRegistry {
+  /** 8 digits or already masked. */
+  readonly postalCode?: string | null;
+  readonly street?: string | null;
+  readonly number?: string | null;
+  readonly complement?: string | null;
+  readonly neighborhood?: string | null;
+  readonly city?: string | null;
+  readonly state?: string | null;
+  readonly mobile?: string | null;
+  readonly phone?: string | null;
+  readonly email?: string | null;
+}
+
+function clean(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const text = value.replace(/\s+/g, ' ').trim();
+  return text === '' || text === 'null' || text === 'undefined' ? null : text;
+}
+
+function formatPostalCode(value: string | null | undefined): string {
+  const text = clean(value);
+  if (text === null) return DASH;
+  const digits = text.replace(/\D/g, '');
+  return digits.length === 8 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : text;
+}
+
+/** Formats a plain Brazilian number (10 or 11 digits, optional 55); anything else is kept as typed. */
+function formatPhone(value: string | null | undefined): string | null {
+  const text = clean(value);
+  if (text === null) return null;
+  const digits = text.replace(/\D/g, '');
+  const national = digits.length >= 12 && digits.startsWith('55') ? digits.slice(2) : digits;
+  if (!/^\d{10,11}$/.test(national) || text.replace(/[\d\s().+-]/g, '') !== '') return text;
+  const split = national.length === 11 ? 7 : 6;
+  return `(${national.slice(0, 2)}) ${national.slice(2, split)}-${national.slice(split)}`;
+}
+
+/** Carrier of the document: the order's own carrier, else the customer's default (Sankhya), else null (a dash). */
+export function resolveDocumentCarrier(orderCarrierName: string | null | undefined, customerDefaultCarrierName: string | null | undefined): string | null {
+  return clean(orderCarrierName) ?? clean(customerDefaultCarrierName);
+}
+
+/** Labelled lines of the customer block: CEP, street (number, complement), neighborhood, city, UF, cell phone (else phone), e-mail. Never empty text. */
+export function customerRegistryLines(registry: OrderDocumentCustomerRegistry | undefined): { label: string; value: string }[] {
+  const r = registry ?? {};
+  const street = clean(r.street);
+  const number = clean(r.number);
+  const complement = clean(r.complement);
+  const streetLine =
+    street === null && number === null && complement === null
+      ? DASH
+      : [street ?? DASH, number === null ? null : `nº ${number}`, complement].filter((part): part is string => part !== null).join(', ');
+  const mobile = formatPhone(r.mobile);
+  const phone = formatPhone(r.phone);
+  return [
+    { label: 'CEP', value: formatPostalCode(r.postalCode) },
+    { label: 'Endereço', value: streetLine },
+    { label: 'Bairro', value: clean(r.neighborhood) ?? DASH },
+    { label: 'Cidade', value: clean(r.city) ?? DASH },
+    { label: 'UF', value: clean(r.state)?.toUpperCase() ?? DASH },
+    { label: mobile === null && phone !== null ? 'Telefone' : 'Celular', value: mobile ?? phone ?? DASH },
+    { label: 'E-mail', value: clean(r.email) ?? DASH },
+  ];
+}
 
 /** Status seal printed on the order document, by Force order status; one wording for web and mobile (PAR-1). */
 export const documentStatusLabels = {
@@ -111,6 +182,8 @@ export function toOrderDocument(source: OrderDocumentSource): OrderDocumentModel
     erpNumber: source.erpNumber,
     customerCode: source.customerCode,
     customerName: source.customerName,
+    ...(source.customerRegistry === undefined ? {} : { customerRegistry: { ...source.customerRegistry } }),
+    ...(source.carrierName === undefined ? {} : { carrierName: source.carrierName }),
     statusLabel: source.statusLabel,
     createdAt: source.createdAt,
     notes: source.notes,
@@ -252,7 +325,12 @@ h1 { margin: 0; font-size: 16pt; color: ${BRAND_BLUE}; text-align: right; }
 .badge { display: inline-block; margin-top: 4px; padding: 1px 8px; border: 1px solid ${BRAND_RED}; color: ${BRAND_RED}; border-radius: 10px; font-weight: 700; }
 section { margin-top: 12px; }
 .cols { display: flex; gap: 12px; }
-.cols > div { flex: 1; border: 1px solid #ddd; padding: 6px; }
+.cols { break-inside: avoid; page-break-inside: avoid; }
+.cols > div { flex: 1; min-width: 0; border: 1px solid #ddd; padding: 6px; overflow-wrap: anywhere; word-break: break-word; }
+.cols > div.wide { flex: 2; }
+.reg { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; margin-top: 4px; }
+.reg > div { min-width: 0; }
+.reg > div.full { grid-column: 1 / -1; }
 h2 { margin: 0 0 4px; font-size: 10.5pt; color: ${BRAND_BLUE}; text-transform: uppercase; letter-spacing: .5px; }
 table { width: 100%; border-collapse: collapse; }
 thead { display: table-header-group; }
@@ -310,6 +388,9 @@ export function renderOrderHtml(model: OrderDocumentModel, options: OrderHtmlOpt
   const conditions = (model.conditions ?? [])
     .map((c) => `<div>${escapeHtml(c.label)}: <strong>${escapeHtml(c.value)}</strong></div>`)
     .join('');
+  const registry = customerRegistryLines(model.customerRegistry)
+    .map((line) => `<div${line.label === 'Endereço' || line.label === 'E-mail' ? ' class="full"' : ''}>${escapeHtml(line.label)}: ${escapeHtml(line.value)}</div>`)
+    .join('');
   const issued =
     options.issuedAt === undefined
       ? 'Emitido pelo Sales Force'
@@ -324,8 +405,9 @@ export function renderOrderHtml(model: OrderDocumentModel, options: OrderHtmlOpt
 <div><div class="kind">${isQuote ? 'ORÇAMENTO' : 'PEDIDO'}</div><h1>${forceNumber}</h1><div class="meta">Data ${escapeHtml(formatDocumentDate(model.createdAt))}</div><div class="badge">${escapeHtml(model.statusLabel)}</div></div>
 </header>
 <section class="cols">
-<div><h2>Cliente</h2><div><strong>${escapeHtml(model.customerName)}</strong></div><div>Cliente ${escapeHtml(model.customerCode)}</div></div>
+<div class="wide"><h2>Cliente</h2><div><strong>${escapeHtml(model.customerName)}</strong></div><div>Cliente ${escapeHtml(model.customerCode)}</div><div class="reg">${registry}</div></div>
 <div><h2>Condições</h2>${conditions === '' ? DASH : conditions}</div>
+<div><h2>Transportadora</h2><div><strong>${escapeHtml(model.carrierName === undefined || model.carrierName === null || model.carrierName.trim() === '' ? DASH : model.carrierName)}</strong></div></div>
 </section>
 <section><h2>Itens</h2>
 <table><thead><tr><th>Item</th><th>Código</th><th>EAN</th><th>Descrição</th><th>Un.</th><th class="n">Quantidade</th><th class="n">Preço unit.</th><th class="n">Desconto</th><th class="n">Valor com desconto</th><th class="n">IPI %</th><th class="n">Total</th></tr></thead>

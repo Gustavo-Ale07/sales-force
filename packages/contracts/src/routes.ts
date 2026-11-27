@@ -99,6 +99,7 @@ import {
   OrdersQuerySchema,
   OrdersResponseSchema,
   ReplaceOrderRequestSchema,
+  EditOrderRequestSchema,
   DuplicateAsOrderRequestSchema,
   RepeatLastOrderRequestSchema,
   CustomerOrderHabitsSchema,
@@ -920,6 +921,19 @@ export const routes = {
     auth: 'session',
     request: { params: OrderPathSchema, body: ReplaceOrderRequestSchema },
     responses: { 200: { description: 'Pedido atualizado (não enviado)', schema: OrderDetailSchema } },
+    errors: [400, 401, 403, 404, 409],
+  }),
+  editOrder: defineRoute({
+    operationId: 'editOrder',
+    method: 'post',
+    path: '/orders/{id}/edit',
+    tags: ['orders'],
+    summary: 'Edit an order already sent to Sankhya (delete and recreate the unconfirmed note)',
+    description:
+      'Owner ruling 2026-11-27. Queues the edit (outbox operation edit_order) and answers 200 with the order in `queued`; the worker revalidates eligibility live (note not confirmed, invoiced, in a load, released or financially settled), deletes the old note and recreates it, keeping the previous ERP note number in the history. Idempotent per `clientRequestId`. 409 conflict (details.reason `not_editable_in_erp`) when the order is not eligible; 409 version_conflict when `expectedVersion` is stale; 409 dataset_mismatch; 409 erp_submission_disabled. The server reprices and revalidates as in a replace.',
+    auth: 'session',
+    request: { params: OrderPathSchema, body: EditOrderRequestSchema },
+    responses: { 200: { description: 'Edição enfileirada; pedido em envio', schema: OrderDetailSchema } },
     errors: [400, 401, 403, 404, 409],
   }),
   deleteOrder: defineRoute({

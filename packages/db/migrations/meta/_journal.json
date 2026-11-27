@@ -456,6 +456,20 @@
       "when": 1795783832182,
       "tag": "0064_server_code",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1795798774979,
+      "tag": "0065_order_edit_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1795800644189,
+      "tag": "0066_erp_customer_registry",
+      "breakpoints": true
     }
   ]
 }

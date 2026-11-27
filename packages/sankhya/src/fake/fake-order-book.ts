@@ -1,6 +1,7 @@
 import { computeDiscountedLineTotal, computeLineDiscountAmount, computeLineTotal, estimateItemIpi, sumTotals, type DecimalString } from '@salesforce/domain';
 import { usesInformedPrice } from '../write/incluir-nota.js';
 import type { ConfirmOrderResult } from '../write/confirmar-nota.js';
+import type { DeleteOrderResult } from '../write/excluir-notas.js';
 import { AmbiguousOriginError, SankhyaGatewayError } from '../errors.js';
 import type {
   ErpOrderRef,
@@ -11,6 +12,7 @@ import type {
   ErpOrderStatusReading,
   ErpOrderReleaseReading,
   ErpOrderStageReading,
+  ErpOrderEditReading,
   ErpBillingReading,
   ErpReleaseLineReading,
 } from '../write/order-contract.js';
@@ -29,7 +31,7 @@ export type FakeOrderOutcome =
   /** `confirm` only: the ERP holds the confirmation behind a pending release; the note stays unconfirmed (not an error). */
   | { readonly kind: 'release_pending' };
 
-export type FakeOrderOperation = 'include' | 'confirm' | 'find' | 'read';
+export type FakeOrderOperation = 'include' | 'confirm' | 'find' | 'read' | 'delete' | 'editFacts';
 
 export interface FakeStoredOrder {
   readonly erpOrderNumber: number;
@@ -78,7 +80,9 @@ export class FakeOrderBook {
   readonly billing = new Map<number, ErpBillingReading>();
   /** Scenario: the billing read of this order failed with this error code (the release lines are still delivered). */
   readonly billingErrorCodes = new Map<number, string>();
-  readonly #scripts: Record<FakeOrderOperation, FakeOrderOutcome[]> = { include: [], confirm: [], find: [], read: [] };
+  /** Order numbers a test marks as carrying a definitive (non-provisional) financial record. */
+  readonly definitiveFinancial = new Set<number>();
+  readonly #scripts: Record<FakeOrderOperation, FakeOrderOutcome[]> = { include: [], confirm: [], find: [], read: [], delete: [], editFacts: [] };
   readonly #options: FakeOrderBookOptions;
   #next: number;
 
@@ -124,6 +128,42 @@ export class FakeOrderBook {
     stored.confirmed = true;
     if (outcome.kind === 'created_then_error') throw outcome.error;
     return { outcome: already ? 'already_confirmed' : 'confirmed', maskedResponse: '{"status":"1","fake":true}' };
+  }
+
+  /**
+   * `excluirNotas`: removes the stored order (F-51). Like the real ERP, only an unconfirmed note goes: a confirmed one is a
+   * `validation` refusal. `created_then_error` = the order IS deleted but the caller sees a failure (the resumable case).
+   */
+  delete(erpOrderNumber: number): DeleteOrderResult {
+    this.calls.push({ operation: 'delete', erpOrderNumber });
+    const outcome = this.#take('delete');
+    if (outcome.kind === 'error') throw outcome.error;
+    const index = this.orders.findIndex((order) => order.erpOrderNumber === erpOrderNumber);
+    const stored = this.orders[index];
+    if (stored === undefined) {
+      throw new SankhyaGatewayError('validation', { code: 'erp_refused_delete', message: 'The ERP did not delete the order: the note does not exist.' });
+    }
+    if (stored.confirmed) {
+      throw new SankhyaGatewayError('validation', { code: 'erp_refused_delete', message: 'The ERP did not delete the order: the note is confirmed.' });
+    }
+    this.orders.splice(index, 1);
+    if (outcome.kind === 'created_then_error') throw outcome.error;
+    return { maskedResponse: '{"status":"1","fake":true}' };
+  }
+
+  editFactsOf(erpOrderNumbers: readonly number[]): ErpOrderEditReading[] {
+    for (const number of erpOrderNumbers) this.calls.push({ operation: 'editFacts', erpOrderNumber: number });
+    const outcome = this.#take('editFacts');
+    if (outcome.kind === 'error' || outcome.kind === 'created_then_error') throw outcome.error;
+    return this.stageOf(erpOrderNumbers).map((stage) => ({
+      erpOrderNumber: stage.erpOrderNumber,
+      found: stage.found,
+      statusNota: stage.statusNota,
+      orderCargo: stage.orderCargo,
+      hasReleaseLines: (stage.releaseLines ?? []).length > 0 || stage.pendingReleases.length > 0,
+      hasInvoiceLink: stage.hasInvoiceLink,
+      hasDefinitiveFinancial: this.definitiveFinancial.has(stage.erpOrderNumber),
+    }));
   }
 
   find(originId: string): ErpOrderRef | null {

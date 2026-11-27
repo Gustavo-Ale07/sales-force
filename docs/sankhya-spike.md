@@ -1208,6 +1208,16 @@ Sonda única autorizada pelo dono (SNK-6 respeitado: escrita real só no Sandbox
 - Falta um serviço de recálculo de totais/financeiro (pedir ao suporte Sankhya: NEEDS VALIDATION).
 - Alternativa validada: excluir o pedido não confirmado (F-51) e recriar com `incluirNota` (novo NUNOTA).
 
+### 9.69 Editar pedido = excluir e recriar (EDIT-1, 2026-11-27) — IMPLEMENTADO, PROVA PENDENTE
+
+Implementado (código, testes com gateway fake; nada rodou contra o Sandbox ainda): leitura de elegibilidade ao vivo (`readOrderEditFacts`: TGFCAB `STATUSNOTA`/`ORDEMCARGA`, existência de `TSILIB`, vínculo `TGFVAR`, título definitivo em `TGFFIN`) e exclusão (`deleteOrder` = `CACSP.excluirNotas`, F-51, corpo `{"notas":{"nota":[{"NUNOTA":"<texto>"}]}}`). Não usa `alterarItens`, `incluirAlterarItemNota`, `DatasetSP.save` em itens nem `cancelarNota` (§9.67).
+
+- Estado ANTES (SELECT somente leitura, Sandbox, 2026-11-27): NUNOTA 2512 e 2513 com `STATUSNOTA` A, `PENDENTE` S, sem `TGFVAR`, sem `ORDEMCARGA`, sem `TSILIB`. 2512: `VLRNOTA` 5267.31, 5 itens, um título provisório (`PROVISAO` S, sem baixa). 2513 (cliente 6004): item 4158, qtd 50, `VLRUNIT` 0, `VLRNOTA` 0, sem título. Ambos elegíveis.
+- Origem: o pedido recriado reutiliza o mesmo `AD_FORCEORIGEM`; o worker só apaga se a origem localizar exatamente o NUNOTA antigo (2512/2513 precisam ter `AD_FORCEORIGEM` = id do pedido; senão a edição é recusada, sem apagar).
+- NEEDS VALIDATION: (a) que `excluirNotas` e `incluirNota` pelo caminho do worker deixam a nota nova com preço não zero e total igual; (b) interpretação de "financeiro definitivo" (título com `PROVISAO` diferente de S ou `DHBAIXA` preenchida); (c) comportamento de `excluirNotas` sobre nota com `TSILIB`/vínculo: a elegibilidade as recusa antes, então o serviço nunca é chamado nesses casos.
+- Nota ausente na 1ª tentativa (já excluída por tentativa anterior do mesmo comando) é tratada como retomada com a origem conferida (SNK-4): nunca exclui duas vezes e só recria depois de a origem estar livre.
+- Prova real: CLI `node dist/cli/order-edit-proof.js [--apply] <NUNOTA>...` (uma tentativa por pedido, SNK-6), roda no container da API (papel que enfileira) com `--apply`, `SF_DEPLOY_ENVIRONMENT=staging` e `SF_ERP_ENVIRONMENT=sandbox`; audita `order.edit_requested` com ator `cli` e o operador.
+
 ### 9.68 Fatos do Sandbox para configuração própria, metas e positivação (VALIDATED, Sandbox, 2026-11-27)
 
 - `TGFPAR.TIPGERBOLCENT` CHAR(1) anulável: NULL 5906, 'I' 61, 'A' 30.
@@ -1220,3 +1230,12 @@ Sonda única autorizada pelo dono (SNK-6 respeitado: escrita real só no Sandbox
 - 110 pedidos dessas TOPs têm nota filha em `TGFVAR` (`NUNOTAORIG` -> `NUNOTA`); filhas faturadas nas TOPs 1101 (79), 1151 (5), 1156 (1), 1951 (9); última em 13/08/2026; novembro sem nota V.
 - `TGFCAB.CANCELADO` é sempre nulo nas notas V.
 - `CODTAB` nulo em 6001-6004, contra 5 nos 5183 ativos.
+
+### 9.70 Cadastro do cliente para o PDF do pedido (VALIDATED, Sandbox, SELECT, 2026-11-27)
+
+Leitura SELECT-only de `TGFPAR` (CLIENTE = 'S' e CODPARC > 0: 5857 clientes), sem dados pessoais aqui, só contagens e nomes de coluna.
+- Colunas que EXISTEM em `TGFPAR`: `EMAIL` VARCHAR2(80) (preenchida em apenas 2 clientes), `TELEFONE` VARCHAR2(13) (5632), `FAX` VARCHAR2(13) (35, não usada), `COMPLEMENTO` VARCHAR2(30) (1929), `CEP` VARCHAR2(8) (5856; comprimentos 8 = 5284, 7 = 519, 4 a 6 = 53), `CODEND` (5673 com valor > 0), `NUMEND` VARCHAR2(6) (5734), `CODBAI` (2903 > 0), `CODCID` (5857).
+- Resolução: `CODCID` -> `TSICID.NOMECID` e `TSICID.UF` (numérico) -> `TSIUFS.UF` (sigla); `CODEND` -> `TSIEND` (`NOMEEND`, `TIPO`); `CODBAI` -> `TSIBAI.NOMEBAI`. Nos 5857 clientes, todos os vínculos de cidade, UF, rua e bairro resolvem (junção sem órfão, `0` = "SEM"). Siglas mais frequentes: SP 1803, BA 494, MG 406.
+- NÃO EXISTEM em `TGFPAR`: `CELULAR`, `TELEFONE2` e `CODTRANSP` (ORA-00904). Nenhuma coluna de celular foi encontrada (os nomes `TIMTELEFONE01/02` são do módulo de integração TIM, não validados como celular). Celular fica nulo.
+- Transportadora padrão: o parceiro tem `TRANSPORTADORA` (flag) e `TGFCPL.CODPARCTRANSP` (complemento do parceiro; 71 linhas, todas 0). Nenhum valor real: o destino (se aponta a parceiro `TRANSPORTADORA = 'S'`) e o significado de 0 = nenhuma NÃO puderam ser validados. NEEDS VALIDATION; `defaultCarrierCode` fica nulo e não é lido.
+- Efeito: o espelho passa a ler `TELEFONE`, `EMAIL`, `CEP`, `NUMEND`, `COMPLEMENTO` e os nomes de rua, bairro, cidade e UF; o espelho antes só os recebia por edição local. Cliente criado ou editado no Force usa o que foi gravado no ERP (mesma leitura).

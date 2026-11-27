@@ -1082,12 +1082,42 @@ describe("Rascunho existente", () => {
 
   it("is read-only once the order is no longer a draft", async () => {
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing(orderDetail({ status: "sent", erpNumber: 555 })) });
-    expect(await screen.findByText("Somente leitura")).toBeInTheDocument();
-    // "Enviado ao Sankhya" appears once as the status; the hint no longer repeats the sentence.
-    expect(screen.queryAllByText(/Enviado ao Sankhya\./)).toHaveLength(0);
+    expect((await screen.findAllByText(/Enviado ao Sankhya/)).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Somente leitura")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Confirmar pedido" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Enviar ao Sankhya" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toHaveAttribute("readonly");
+  });
+
+  describe("EDIT-1: Editar", () => {
+    it("shows Editar only when the server says canEdit", async () => {
+      const withEdit = renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing(orderDetail({ status: "sent", erpNumber: 555, canEdit: true })) });
+      expect(await screen.findByRole("button", { name: "Editar" })).toBeInTheDocument();
+      withEdit.unmount();
+      renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing(orderDetail({ status: "sent", erpNumber: 555, canEdit: false })) });
+      expect(await screen.findByRole("button", { name: /Duplicar/ })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
+    });
+
+    it("calls editOrder (not replaceOrder) and repeats the same clientRequestId on a repeated attempt", async () => {
+      const { user, calls } = renderApp(`/pedidos/${ORDER_ID}`, {
+        handlers: existing(orderDetail({ status: "sent", erpNumber: 555, canEdit: true }), {
+          "POST /orders/:id/edit": apiError(409, "not_editable_in_erp", "x", { requestId: "req-ed-1" }),
+        }),
+      });
+      await user.click(await screen.findByRole("button", { name: "Editar" }));
+      const quantity = await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho");
+      await user.clear(quantity);
+      await user.type(quantity, "3");
+      await user.click(screen.getByRole("button", { name: /^Confirmar/ }));
+      expect(await screen.findByText("Este pedido não pode mais ser editado.")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: /^Confirmar/ }));
+      await waitFor(() => expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/edit`)).toHaveLength(2));
+      const [first, second] = callsTo(calls, "POST", `/orders/${ORDER_ID}/edit`);
+      expect(first?.body).toMatchObject({ expectedVersion: 1, items: [{ productCode: 2001, quantity: "3" }] });
+      expect((second?.body as { clientRequestId: string }).clientRequestId).toBe((first?.body as { clientRequestId: string }).clientRequestId);
+      expect(callsTo(calls, "PUT", `/orders/${ORDER_ID}`)).toHaveLength(0);
+    });
   });
 
   it("D-Y: deletes the quote/order from the editor after confirming and returns to the list", async () => {
@@ -1118,33 +1148,21 @@ describe("Rascunho existente", () => {
     expect(await screen.findByText("Carregando pedido…")).toBeInTheDocument();
   });
 
-  it("D-AA: a failed delivery offers Reenviar, which submits the same order again", async () => {
+  it("a rejected delivery shows only the Precisa de correção badge: no explanatory alert, no Reenviar", async () => {
     const failed = orderDetail({ status: "rejected", erpDelivery: { errorClass: "validation", errorCode: "environment_mismatch" } });
-    const { user, calls } = renderApp(`/pedidos/${ORDER_ID}`, {
-      handlers: existing(failed, { "POST /orders/:id/submit": { body: orderDetail({ status: "queued" }) } }),
-    });
-    await user.click(await screen.findByRole("button", { name: "Reenviar" }));
-    expect(await screen.findByText("Reenviando ao Sankhya")).toBeInTheDocument();
-    expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(1);
-  });
-
-  it("a rejected delivery (Precisa de correção) stays editable and Reenviar shows the approval conflict text", async () => {
-    const failed = orderDetail({ status: "rejected", erpDelivery: { errorClass: "validation", errorCode: "environment_mismatch" } });
-    const { user } = renderApp(`/pedidos/${ORDER_ID}`, {
-      handlers: existing(failed, { "POST /orders/:id/submit": apiError(409, "conflict", "x", { details: { reason: "approval_required_before_resend" } }) }),
-    });
-    await user.click(await screen.findByRole("button", { name: "Reenviar" }));
-    expect(await screen.findByText("O desconto deste pedido agora exige aprovação. Exclua o pedido e faça um novo.")).toBeInTheDocument();
+    renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing(failed) });
+    expect(await screen.findByText("Precisa de correção")).toBeInTheDocument();
+    expect(screen.queryByText("Motivo da falha no envio")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reenviar" })).not.toBeInTheDocument();
     expect(screen.queryByText("Somente leitura")).not.toBeInTheDocument();
   });
 
-  it("an unknown delivery says it is being verified and offers Verificar agora, which asks the server once (same order, no resend)", async () => {
+  it("an unknown delivery offers Verificar agora, which asks the server once (same order, no resend)", async () => {
     const unknown = orderDetail({ status: "unknown" });
     const { user, calls } = renderApp(`/pedidos/${ORDER_ID}`, {
       handlers: existing(unknown, { "POST /orders/:id/verify-delivery": { body: unknown } }),
     });
-    expect(await screen.findByText("O envio ao Sankhya está sendo conferido. Não envie de novo.")).toBeInTheDocument();
-    expect(screen.queryByText(/Confira no Sankhya/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Não envie de novo/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reenviar" })).not.toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: "Verificar agora" }));
     expect(await screen.findByText("Verificando o envio com o Sankhya")).toBeInTheDocument();
@@ -1160,17 +1178,16 @@ describe("Rascunho existente", () => {
     renderApp(`/pedidos/${ORDER_ID}`, {
       handlers: existing(orderDetail({ status: "rejected", erpDelivery: { errorClass: "timeout", errorCode: "include_timeout_unconfirmed" } })),
     });
-    expect(await screen.findByText(/O Sankhya não confirmou o recebimento a tempo/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reenviar" })).toBeInTheDocument();
+    expect(await screen.findByText("Precisa de correção")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Excluir" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Verificar agora" })).not.toBeInTheDocument();
   });
 
-  it("K2: a failure by ambiguous origin says IT must check, has Excluir and no Reenviar", async () => {
+  it("K2: a failure by ambiguous origin shows the badge, has Excluir and no Reenviar", async () => {
     renderApp(`/pedidos/${ORDER_ID}`, {
       handlers: existing(orderDetail({ status: "rejected", erpDelivery: { errorClass: "permanent", errorCode: "ambiguous_origin" } })),
     });
-    expect((await screen.findAllByText(/Há mais de uma nota com este pedido no Sankhya\. Peça à TI para conferir\./)).length).toBeGreaterThan(0);
+    expect(await screen.findByText("Precisa de correção")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Excluir" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reenviar" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Verificar agora" })).not.toBeInTheDocument();

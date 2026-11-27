@@ -116,7 +116,7 @@ export function saleBadge(view: StatusView): SaleBadge {
 }
 
 /** Where the order is and what the seller should do, in plain words (detail screen). */
-export function saleExplanation(draft: Pick<DraftRecord, "status" | "remoteId" | "lastError"> & SendView & Partial<Pick<DraftRecord, "sendError">>): string {
+export function saleExplanation(draft: Pick<DraftRecord, "status" | "remoteId" | "lastError"> & SendView & Partial<Pick<DraftRecord, "sendError">>): string | null {
   if (isCustomerUnavailable(draft)) {
     // The stored text is the cause itself (inativo, bloqueado, sem vendedor…); an old generic marker keeps the old wording.
     const cause = (draft.lastError === CUSTOMER_UNAVAILABLE_MESSAGE || draft.lastError === LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE) ? "O cadastro deste cliente mudou (inativo ou bloqueado)." : draft.lastError;
@@ -125,56 +125,16 @@ export function saleExplanation(draft: Pick<DraftRecord, "status" | "remoteId" |
   if (isProductBlocked(draft)) {
     return `${draft.lastError} — revise os itens do pedido. O pedido não será enviado enquanto isso não for resolvido. Nada foi alterado ou apagado.`;
   }
-  const phase = draft.status === "synced" || draft.sendState === "requested" ? sendPhaseOf(draft) : null;
-  if (phase !== null) {
-    switch (phase) {
-      case "waiting":
-        return "Salvo neste aparelho. Será enviado ao Sankhya assim que possível.";
-      case "rejected":
-        // The reason is the server's delivery error, in the same words as the site (`deliveryErrorText`).
-        return draft.sendError ? `Precisa de correção. ${draft.sendError}. Edite o pedido e confirme de novo.` : "Precisa de correção. Edite o pedido e confirme de novo.";
-      case "refused":
-        return `Precisa de correção. ${draft.sendError ?? ""} Corrija o que for preciso e confirme de novo.`.replace(/\s+/g, " ").trim();
-      case "in_sankhya":
-        return "Este pedido foi enviado ao Sankhya.";
-      case "verifying":
-        return "O envio ao Sankhya está sendo conferido. Não envie de novo.";
-      case "awaiting_approval":
-        return "O desconto deste pedido espera a aprovação de um gestor.";
-      case "approval_rejected":
-        return "O desconto foi reprovado. Edite o pedido antes de enviá-lo de novo.";
-      case "approved":
-        return "O desconto foi aprovado. O pedido segue para o Sankhya.";
-    }
+  // Status only: no passive text for waiting, sent, "Precisa de correção", approval, conflict or price review (badge + buttons).
+  if (draft.status === "sync_error") {
+    return `Não foi possível enviar este pedido. ${draft.lastError ?? ""} Corrija o que for preciso ou tente enviar novamente.`.replace(/\s+/g, " ").trim();
   }
-  switch (draft.status) {
-    case "local_only":
-    case "pending_sync":
-    case "syncing":
-    case "synced":
-      return "Salvo neste aparelho. Ainda não foi enviado ao Sankhya.";
-    case "sync_error":
-      return `Não foi possível enviar este pedido. ${draft.lastError ?? ""} Corrija o que for preciso ou tente enviar novamente.`.replace(/\s+/g, " ").trim();
-    case "conflict":
-      return "Este pedido foi alterado em outro lugar. Escolha qual versão manter; nada foi sobrescrito.";
-    case "needs_review":
-      return "Os preços mudaram desde a última atualização. Revise os novos preços antes de enviar.";
-  }
+  return null;
 }
 
-/** The explanation only when the seller has something to fix or decide (blocked, refused, error, conflict, price review, rejected discount); `null` for plain progress states. */
+/** Text only for a failure the seller caused and can act on (held customer/product, send error); `null` for every status. */
 export function saleActionableExplanation(draft: Parameters<typeof saleExplanation>[0]): string | null {
-  const phase = draft.status === "synced" || draft.sendState === "requested" ? sendPhaseOf(draft) : null;
-  const actionable =
-    isCustomerUnavailable(draft) ||
-    isProductBlocked(draft) ||
-    draft.status === "sync_error" ||
-    draft.status === "conflict" ||
-    draft.status === "needs_review" ||
-    phase === "refused" ||
-    phase === "rejected" ||
-    phase === "approval_rejected";
-  return actionable ? saleExplanation(draft) : null;
+  return saleExplanation(draft);
 }
 
 export interface SaleActions {

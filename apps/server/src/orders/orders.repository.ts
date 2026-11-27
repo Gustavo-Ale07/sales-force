@@ -319,7 +319,7 @@ export class OrdersRepository {
     const [row] = await executor
       .select({ errorClass: integrationOutbox.lastErrorClass, message: integrationOutbox.lastErrorMessage })
       .from(integrationOutbox)
-      .where(and(eq(integrationOutbox.aggregateType, 'sales_order'), eq(integrationOutbox.aggregateId, orderId)))
+      .where(and(eq(integrationOutbox.aggregateType, 'sales_order'), eq(integrationOutbox.operation, 'send_order'), eq(integrationOutbox.aggregateId, orderId)))
       .orderBy(desc(integrationOutbox.createdAt))
       .limit(1);
     return row ?? null;
@@ -450,8 +450,8 @@ export class OrdersRepository {
           itemCount: sql<number>`(select count(*)::int from ${salesOrderItem} where ${salesOrderItem.orderId} = ${salesOrder.id})`,
           itemPreview: sql<string[]>`array(select ${salesOrderItem.productDescription} from ${salesOrderItem} where ${salesOrderItem.orderId} = ${salesOrder.id} order by ${previewFirst}${salesOrderItem.lineNo} limit ${sql.raw(String(ITEM_PREVIEW_SIZE))})`,
           unpricedCount: sql<number>`(select count(*)::int from ${salesOrderItem} where ${salesOrderItem.orderId} = ${salesOrder.id} and ${salesOrderItem.priceState} = 'none')`,
-          deliveryErrorClass: sql<string | null>`(select o.last_error_class from ${integrationOutbox} o where ${salesOrder.status} = 'rejected' and o.aggregate_type = 'sales_order' and o.aggregate_id = ${salesOrder.id} order by o.created_at desc limit 1)`,
-          deliveryErrorMessage: sql<string | null>`(select o.last_error_message from ${integrationOutbox} o where ${salesOrder.status} = 'rejected' and o.aggregate_type = 'sales_order' and o.aggregate_id = ${salesOrder.id} order by o.created_at desc limit 1)`,
+          deliveryErrorClass: sql<string | null>`(select o.last_error_class from ${integrationOutbox} o where ${salesOrder.status} = 'rejected' and o.aggregate_type = 'sales_order' and o.operation = 'send_order' and o.aggregate_id = ${salesOrder.id} order by o.created_at desc limit 1)`,
+          deliveryErrorMessage: sql<string | null>`(select o.last_error_message from ${integrationOutbox} o where ${salesOrder.status} = 'rejected' and o.aggregate_type = 'sales_order' and o.operation = 'send_order' and o.aggregate_id = ${salesOrder.id} order by o.created_at desc limit 1)`,
         })
         .from(salesOrder)
         .leftJoin(erpCustomer, eq(erpCustomer.code, salesOrder.customerCode))

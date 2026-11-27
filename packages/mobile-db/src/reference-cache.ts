@@ -461,6 +461,13 @@ export async function productGroups(tx: SqlExecutor): Promise<ProductGroupEntry[
   return rows.map((row) => ({ code: Number(row.group_code), name: row.group_name === null ? null : String(row.group_name), count: Number(row.n) }));
 }
 
+/** One cached customer as the API delivered it (registry included), or `null` when it is not on this device. */
+export async function getCachedCustomer<T extends CustomerLike>(tx: SqlExecutor, code: number): Promise<T | null> {
+  const rows = await tx.query<SqlRow>("SELECT data FROM cache_customer WHERE code = ?", [code]);
+  const row = rows[0];
+  return row === undefined ? null : (JSON.parse(String(row.data)) as T);
+}
+
 export async function getCachedProduct<T extends ProductLike>(tx: SqlExecutor, code: number, priceTableCode?: number): Promise<T | null> {
   if (priceTableCode !== undefined) {
     const rows = await tx.query<SqlRow>(

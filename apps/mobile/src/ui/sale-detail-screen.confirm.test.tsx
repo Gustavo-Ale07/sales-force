@@ -84,29 +84,13 @@ describe("SaleDetailScreen Confirmar", () => {
     expect(screen.queryByText("Pedido não enviado ao Sankhya")).toBeNull();
   });
 
-  it("a definitive refusal (customer without seller) opens a popup with 'Trocar cliente' once and the button becomes 'Tentar de novo'", async () => {
-    const onContinue = jest.fn();
+  it("an order already refused opens with no popup and no explanation: only the badge and buttons", async () => {
     const refused = draftRecord({ localId: "r1", status: "synced", remoteId: "r-r1", remoteVersion: 1, sendState: "refused", sendCode: "customer_without_seller", sendError: "Este cliente não tem vendedor vinculado." });
-    const { confirm } = await show(refused, async () => ({ kind: "queued" }), { onContinue });
-    expect(await screen.findByText("Cliente sem vendedor")).toBeTruthy();
-    expect(screen.getAllByText("Cliente sem vendedor")).toHaveLength(1);
+    const { confirm } = await show(refused, async () => ({ kind: "queued" }));
+    expect(await screen.findByText("Precisa de correção")).toBeTruthy();
+    expect(screen.queryByText("Cliente sem vendedor")).toBeNull();
+    expect(screen.queryByText("Este cliente não tem vendedor vinculado.")).toBeNull();
     expect(confirm).not.toHaveBeenCalled();
-    await act(async () => {
-      fireEvent.press(screen.getByRole("button", { name: "Trocar cliente" }));
-    });
-    expect(onContinue).toHaveBeenCalledWith("r1");
-  });
-
-  it("discount_blocked and erp_submission_disabled refusals each get their own popup", async () => {
-    const blocked = draftRecord({ localId: "b1", status: "synced", remoteId: "r-b1", sendState: "refused", sendCode: "discount_blocked" });
-    await show(blocked, async () => ({ kind: "queued" }));
-    expect(await screen.findByText("Desconto bloqueado")).toBeTruthy();
-  });
-
-  it("erp_submission_disabled", async () => {
-    const off = draftRecord({ localId: "d1", status: "synced", remoteId: "r-d1", sendState: "refused", sendCode: "erp_submission_disabled" });
-    await show(off, async () => ({ kind: "queued" }));
-    expect(await screen.findByText("Envio ao Sankhya desligado")).toBeTruthy();
   });
 
   it("the PDF file name falls back to 'pedido' while the order has no number", async () => {

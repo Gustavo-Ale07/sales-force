@@ -150,6 +150,49 @@ describe("NewOrderScreen — reopening a saved draft for editing (PUT /orders/{i
     await waitFor(() => expect((screen.getByLabelText("Quantidade de Copo 200 ml").props as { value: string }).value).toBe("5"));
   });
 
+  describe("editing an order already sent (EDIT-1, POST /orders/{id}/edit)", () => {
+    const sentOrder = orderDetail({
+      id: "0190a0c0-0000-7000-8000-000000000077",
+      customerCode: 10,
+      customerName: "Padaria Central",
+      version: 3,
+      items: [orderItem({ productCode: 5, productDescription: "Copo 200 ml", quantity: "1", unitListPrice: "10.00", discountPercent: "0" })],
+    });
+    const mount = async (orders: OrderRepository) => {
+      const customers = { list: async () => pageOf([customer(10, { name: "Padaria Central" })]) };
+      const products = fakeProducts();
+      await render(withModal(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} editRequest={{ nonce: 1, orderId: sentOrder.id }} />));
+    };
+
+    it("loads the server order, confirms through edit with a clientRequestId and the loaded version, never replace", async () => {
+      const edit = jest.fn(async (_id: string, request: { expectedVersion: number }) => ({ ...sentOrder, version: request.expectedVersion + 1, status: "queued" as const }));
+      const replace = jest.fn();
+      await mount(fakeOrders({ get: async () => sentOrder, edit, replace }));
+      await pressAndSettle(await screen.findByRole("button", { name: "Confirmar" }));
+      expect(await screen.findByText("Edição enviada ao Sankhya")).toBeTruthy();
+      expect(replace).not.toHaveBeenCalled();
+      const [id, request] = edit.mock.calls[0]! as unknown as [string, { clientRequestId: string; expectedVersion: number; customerCode: number }];
+      expect(id).toBe(sentOrder.id);
+      expect(request.expectedVersion).toBe(3);
+      expect(request.customerCode).toBe(10);
+      expect(request.clientRequestId).toMatch(/^[0-9a-f-]{36}$/);
+    });
+
+    it("reuses the same clientRequestId when the same attempt is repeated after a failure", async () => {
+      const ids: string[] = [];
+      const edit = jest.fn(async (_id: string, request: { clientRequestId: string }) => {
+        ids.push(request.clientRequestId);
+        throw new ApiRequestError({ status: 409, code: "not_editable_in_erp", message: "x" });
+      });
+      await mount(fakeOrders({ get: async () => sentOrder, edit }));
+      await pressAndSettle(await screen.findByRole("button", { name: "Confirmar" }));
+      expect(await screen.findByText("Pedido não pode ser editado")).toBeTruthy();
+      await pressAndSettle(screen.getByRole("button", { name: "Confirmar" }));
+      expect(ids).toHaveLength(2);
+      expect(ids[0]).toBe(ids[1]);
+    });
+  });
+
   it("expires the session when reopening a draft fails with 401", async () => {
     const saved = orderDetail({
       draftNumber: 42,

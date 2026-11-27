@@ -303,6 +303,33 @@ export type SalesOrderReleasePendingRow = typeof salesOrderReleasePending.$infer
  * One discount approval request per submission of an order above its owner authority (DISC-2..6). Append-only history:
  * a decided or invalidated row is never reopened, a new submission creates a new row. At most one is pending per order.
  */
+/**
+ * Edit = delete and recreate (owner ruling 2026-11-27): the Force order keeps its id and origin id, but its Sankhya note is
+ * replaced. One row per REPLACED note (the previous NUNOTA), written by the worker in the same transaction that clears or
+ * replaces `sales_order.erp_number`. A row for (order, NUNOTA) is the only thing that lets the write-once trigger of
+ * `erp_number` release that number. Never deleted except by the cascade of the order.
+ */
+export const salesOrderErpHistory = pgTable(
+  'sales_order_erp_history',
+  {
+    id: uuid('id').primaryKey(),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => salesOrder.id, { onDelete: 'cascade' }),
+    /** The NUNOTA that was deleted in Sankhya. */
+    erpNumber: bigint('erp_number', { mode: 'number' }).notNull(),
+    /** Who requested the edit. */
+    editedByAccountId: uuid('edited_by_account_id').references(() => account.id),
+    replacedAt: timestamp('replaced_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    check('sales_order_erp_history_number_chk', sql`${t.erpNumber} > 0 and ${t.erpNumber} <= 2147483647`),
+    uniqueIndex('sales_order_erp_history_order_number_uq').on(t.orderId, t.erpNumber),
+    index('sales_order_erp_history_order_idx').on(t.orderId, t.replacedAt),
+  ],
+);
+export type SalesOrderErpHistoryRow = typeof salesOrderErpHistory.$inferSelect;
+
 export const salesOrderApproval = pgTable(
   'sales_order_approval',
   {

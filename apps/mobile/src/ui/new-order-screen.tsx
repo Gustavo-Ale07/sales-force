@@ -78,6 +78,9 @@ export interface NewOrderScreenProps {
   readonly controlRef?: MutableRefObject<NewOrderControl | null>;
   /** Post-confirmation "Ver pedido": opens the read-only detail of the confirmed order in the sales list. */
   readonly onViewOrder?: (localId: string) => void;
+  /** "Editar" on an order already sent (EDIT-1): loads the server order live (online only) and opens the summary; handled once per `nonce`. */
+  readonly editRequest?: { readonly nonce: number; readonly orderId: string } | null;
+  readonly onEditConsumed?: () => void;
   /** Post-confirmation "Voltar ao início": goes to the Início tab (the shell applies its tab reset rules). */
   readonly onGoHome?: () => void;
   /** The order's number or stage was refreshed while the screen was open or as it was left: the list reloads. */
@@ -117,6 +120,8 @@ export function NewOrderScreen({
   onExit,
   controlRef,
   onViewOrder,
+  editRequest = null,
+  onEditConsumed,
   onGoHome,
   onOrderUpdated,
   templates,
@@ -139,6 +144,8 @@ export function NewOrderScreen({
   const requestIdRef = useRef<{ payload: string; id: string } | null>(null);
   /** `null` while creating a fresh draft; the loaded order (its id, version, negotiation type and notes) while editing one. */
   const [editingOrder, setEditingOrder] = useState<OrderDetail | null>(null);
+  /** The loaded order was already sent to Sankhya (EDIT-1): confirming calls `POST /orders/{id}/edit` online, never the local outbox. */
+  const [erpEdit, setErpEdit] = useState(false);
   /** Phone-appropriate stand-in for the desktop's checkboxes + toolbar (DISC-1/MOB-4): long-press or this toggle. */
   const [selectionMode, setSelectionMode] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -396,6 +403,35 @@ export function NewOrderScreen({
     };
   }, [resumeLocalId, localOrders, onResumeConsumed, errors, modal]);
 
+  const editNonce = editRequest?.nonce ?? null;
+  const editOrderId = editRequest?.orderId ?? null;
+  useEffect(() => {
+    if (editNonce === null || editOrderId === null) return;
+    onEditConsumed?.();
+    void (async () => {
+      try {
+        const order = await repositories.orders.get(editOrderId);
+        const editLines = order.items.map((item, index) => lineFromOrderItem(item, `edit-${index}`));
+        resetOrder();
+        baselineRef.current = orderSignature(order.customerCode, editLines);
+        setErpEdit(true);
+        setEditingOrder(order);
+        setCustomer({ code: order.customerCode, name: order.customerName });
+        setLines(editLines);
+        goToStep("summary");
+      } catch (error) {
+        if (error instanceof ApiRequestError && error.status === 401) {
+          onUnauthenticated();
+          return;
+        }
+        onExit?.();
+        errors.report(error, undefined, { title: "Não foi possível abrir o pedido" });
+      }
+    })();
+    // Only a new request (nonce) triggers this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editNonce]);
+
   useEffect(() => {
     let active = true;
     void loadConfiguration(repositories.orders);
@@ -493,6 +529,7 @@ export function NewOrderScreen({
     setConfirmResult(null);
     setLocalDraft(null);
     setEditingOrder(null);
+    setErpEdit(false);
     setSelectionMode(false);
     setSelected(new Set());
     setDiscountAccepted(false);
@@ -782,7 +819,7 @@ export function NewOrderScreen({
    * is changed only by "Salvar e sair" or "Confirmar". Only a complete, valid cart is stored; a failure stays silent.
    */
   async function autoSave() {
-    if (localOrders === undefined || customer === null || saving || finished || !dirty || !isNewOrder) return;
+    if (localOrders === undefined || customer === null || saving || finished || !dirty || !isNewOrder || editingOrder !== null) return;
     if (lines.length === 0 || !preview.valid || blockedLineCount > 0) return;
     try {
       await persistLocal(localOrders, customer, undefined, true);
@@ -1063,7 +1100,18 @@ export function NewOrderScreen({
         ...(overLimitAccepted ? { discountAboveLimitAccepted: true } : {}),
         items: toRequestItems(lines),
       };
-      if (editingOrder !== null) {
+      if (editingOrder !== null && erpEdit) {
+        // One id per attempt: a repeated tap (or a retry after a lost response) of the same payload resends the same id; an edited payload or a reloaded version gets a new one.
+        const edit = { expectedVersion: editingOrder.version, ...body };
+        const payload = JSON.stringify(edit);
+        if (requestIdRef.current?.payload !== payload) {
+          requestIdRef.current = { payload, id: newClientRequestId() };
+        }
+        const updated = await repositories.orders.edit(editingOrder.id, { clientRequestId: requestIdRef.current.id, ...edit });
+        setEditingOrder(updated);
+        setSavedOrder(updated);
+        orderUpdatedRef.current?.();
+      } else if (editingOrder !== null) {
         const updated = await repositories.orders.replace(editingOrder.id, { expectedVersion: editingOrder.version, ...body });
         setEditingOrder(updated);
         setSavedOrder(updated);
@@ -1138,22 +1186,38 @@ export function NewOrderScreen({
   if (savedOrder !== null) {
     return (
       <View style={styles.center}>
-        <Text style={styles.successTitle}>{editingOrder !== null ? "Alterações salvas" : `${kindTitle} salvo`}</Text>
+        <Text style={styles.successTitle}>{erpEdit ? "Edição enviada ao Sankhya" : editingOrder !== null ? "Alterações salvas" : `${kindTitle} salvo`}</Text>
         <Text style={styles.successMeta}>{savedOrder.customerName}</Text>
         <Text style={styles.successTotal}>{formatBrl(savedOrder.ipi?.grandTotalEstimated ?? savedOrder.estimatedTotal) ?? "—"}</Text>
         {savedOrder.isPartial && <Text style={styles.partialNotice}>Total parcial: há itens sem preço neste pedido.</Text>}
         <View style={styles.actions}>
-          <Pressable style={styles.primaryButton} onPress={resetOrder} accessibilityRole="button" accessibilityLabel="Novo pedido">
-            <Text style={styles.primaryButtonText}>Novo pedido</Text>
-          </Pressable>
-          <Pressable
-            style={styles.secondaryButton}
-            onPress={() => editSavedOrder(savedOrder)}
-            accessibilityRole="button"
-            accessibilityLabel="Editar pedido"
-          >
-            <Text style={styles.secondaryButtonText}>Editar pedido</Text>
-          </Pressable>
+          {erpEdit && onExit !== undefined ? (
+            <Pressable
+              style={styles.primaryButton}
+              onPress={() => {
+                resetOrder();
+                onExit();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Voltar para Vendas"
+            >
+              <Text style={styles.primaryButtonText}>Voltar para Vendas</Text>
+            </Pressable>
+          ) : (
+            <Pressable style={styles.primaryButton} onPress={resetOrder} accessibilityRole="button" accessibilityLabel="Novo pedido">
+              <Text style={styles.primaryButtonText}>Novo pedido</Text>
+            </Pressable>
+          )}
+          {!erpEdit && (
+            <Pressable
+              style={styles.secondaryButton}
+              onPress={() => editSavedOrder(savedOrder)}
+              accessibilityRole="button"
+              accessibilityLabel="Editar pedido"
+            >
+              <Text style={styles.secondaryButtonText}>Editar pedido</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     );
@@ -1411,7 +1475,7 @@ export function NewOrderScreen({
         </Pressable>
       )}
       {step === "summary" ? (
-        localOrders !== undefined ? (
+        localOrders !== undefined && !erpEdit ? (
           <WizardFooter
             onBack={goBack}
             onNext={() => void confirmOrder()}

@@ -142,6 +142,13 @@ export {
   type ConfirmOrderOutcome,
   type ConfirmOrderResult,
 } from './write/confirmar-nota.js';
+export {
+  EXCLUIR_NOTAS_PATH,
+  buildExcluirNotasBody,
+  buildExcluirNotasRequestText,
+  parseExcluirNotasResponse,
+  type DeleteOrderResult,
+} from './write/excluir-notas.js';
 export { FakeOrderBook, type FakeOrderBookOptions, type FakeOrderCall, type FakeOrderOperation, type FakeOrderOutcome, type FakeStoredOrder } from './fake/fake-order-book.js';
 export {
   INCLUIR_NOTA_PATH,

@@ -38,6 +38,27 @@ export const CustomerLettersResponseSchema = named(
 );
 export type CustomerLettersResponse = z.infer<typeof CustomerLettersResponseSchema>;
 
+/**
+ * Registry data of the customer as the ERP records it, for the order PDF (spike §9.70). Every field is `null` when the ERP holds
+ * nothing for it; `mobile` stays `null` until a validated ERP column exists. Never cost, margin or any restricted data (P-20).
+ */
+export const CustomerRegistrySchema = named(
+  'CustomerRegistry',
+  z.object({
+    postalCode: z.string().nullable(),
+    street: z.string().nullable(),
+    number: z.string().nullable(),
+    complement: z.string().nullable(),
+    neighborhood: z.string().nullable(),
+    city: z.string().nullable(),
+    state: z.string().nullable(),
+    mobile: z.string().nullable(),
+    phone: z.string().nullable(),
+    email: z.string().nullable(),
+  }),
+);
+export type CustomerRegistry = z.infer<typeof CustomerRegistrySchema>;
+
 export const CustomerListItemSchema = named(
   'CustomerListItem',
   z.object({
@@ -59,6 +80,12 @@ export const CustomerListItemSchema = named(
     overdue: z.boolean().optional(),
     /** Fingerprint of the mirrored phone and e-mail: the app sends it back as `baseContactVersion` to detect an edit made over a stale copy. */
     contactVersion: z.string().optional(),
+    /** Additive (sync-protocol: optional field, no version bump): registry data for the order PDF; absent from older servers. */
+    registry: CustomerRegistrySchema.optional(),
+    /**
+     * Additive: code of the customer's default carrier. `null` until a validated ERP source exists (spike §9.70).
+     */
+    defaultCarrierCode: z.string().nullable().optional(),
   }),
 );
 export type CustomerListItem= z.infer<typeof CustomerListItemSchema>;

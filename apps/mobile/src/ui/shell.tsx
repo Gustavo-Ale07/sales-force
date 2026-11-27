@@ -133,6 +133,8 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const syncStatus = useSyncStatus(services?.sync ?? null, connectivityState, session.phase === "authenticated" && session.freshLogin === true, services?.openEvents, ordersAreaKey);
   const clearResume = useCallback(() => setResumeLocalId(null), []);
   const clearStart = useCallback(() => setStartRequest(null), []);
+  const [editRequest, setEditRequest] = useState<{ nonce: number; orderId: string } | null>(null);
+  const clearEdit = useCallback(() => setEditRequest(null), []);
   // Retained (quarantined) orders: re-counted whenever the sync counters move or the seller changes them.
   const localOrdersForCount = services?.localOrders ?? null;
   useEffect(() => {
@@ -386,6 +388,12 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
 
   const openDraft = (localId: string) => {
     setResumeLocalId(localId);
+    setSalesView("newOrder");
+    selectTab("sales");
+  };
+  /** "Editar" on an order already sent (EDIT-1): the wizard loads the server order live. */
+  const editSentOrder = (orderId: string) => {
+    setEditRequest({ nonce: Date.now(), orderId });
     setSalesView("newOrder");
     selectTab("sales");
   };
@@ -648,6 +656,8 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                     })}
                 startRequest={startRequest}
                 onStartConsumed={clearStart}
+                editRequest={editRequest}
+                onEditConsumed={clearEdit}
                 {...(dependencies.orderTemplates !== undefined ? { templates: dependencies.orderTemplates } : {})}
               />
             </View>
@@ -668,6 +678,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                   onNewSale={() => setSalesView("newOrder")}
                   onContinue={openDraft}
                   onDuplicate={duplicateSale}
+                  onEdit={editSentOrder}
                   onSyncNow={syncNow}
                   resetSignal={salesReset}
                   refreshSignal={salesRefresh}

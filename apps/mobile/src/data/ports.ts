@@ -86,6 +86,8 @@ export interface CustomerRepository {
   financial?(code: number): Promise<CustomerFinancial | null>;
   /** Alphabetical index of the searched/filtered list. Only where it can run in the local database. */
   letters?(request: Pick<CustomerPageRequest, "search" | "filters">): Promise<readonly CustomerLetter[]>;
+  /** The customer as stored on this device (registry data included), `null` when absent. Only where a local cache exists. */
+  cached?(code: number): Promise<CustomerListItem | null>;
   /** Sellers present in the portfolio available on this device (for the seller filter). */
   sellers?(): Promise<readonly CustomerSellerOption[]>;
 }
@@ -133,6 +135,7 @@ export type DuplicateAsOrderRequest = ApiSchema<"DuplicateAsOrderRequest">;
 export type DuplicateAsOrderResult = ApiSchema<"RepeatLastOrderResponse">;
 export type Carrier = ApiSchema<"Carrier">;
 export type ReplaceOrderRequest = ApiSchema<"ReplaceOrderRequest">;
+export type EditOrderRequest = ApiSchema<"EditOrderRequest">;
 
 /**
  * Online-only draft order writes (MOB-4). Save always goes to the server; there is no local outbox in this
@@ -147,6 +150,8 @@ export interface OrderRepository {
   create(request: CreateOrderRequest): Promise<OrderDetail>;
   get(id: string): Promise<OrderDetail>;
   replace(id: string, request: ReplaceOrderRequest): Promise<OrderDetail>;
+  /** `POST /orders/{id}/edit` (EDIT-1): edits an order already sent to Sankhya. ONLINE only (the server reads the ERP live); never queued offline. */
+  edit(id: string, request: EditOrderRequest): Promise<OrderDetail>;
   /** `POST /orders/{id}/duplicate-as-order` (D-B): a new draft with the default order TOP from a quotation. Online only. */
   duplicateAsOrder(id: string, request: DuplicateAsOrderRequest): Promise<DuplicateAsOrderResult>;
   /** Active carriers (`GET /carriers`, D-C), ordered by name. Offline-first adapters answer from the last list they stored. */

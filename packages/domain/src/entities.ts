@@ -97,8 +97,28 @@ export interface PostalCodeEntry {
   readonly streetCode: number;
 }
 
+/**
+ * Registry data of a partner as the ERP records it (spike §9.70). Every field is `null` when the ERP holds nothing; text is
+ * trimmed, never invented. No mobile phone and no default carrier exist in the validated ERP columns, so neither is here.
+ */
+export interface CustomerRegistryData {
+  readonly postalCode: string | null;
+  /** "TYPE NAME" when the ERP stores a street type, else the name. */
+  readonly street: string | null;
+  readonly number: string | null;
+  readonly complement: string | null;
+  readonly neighborhood: string | null;
+  readonly city: string | null;
+  /** Two-letter state abbreviation. */
+  readonly state: string | null;
+  readonly phone: string | null;
+  readonly email: string | null;
+}
+
 export interface Customer {
   readonly code: number;
+  /** Registry data read from the ERP partner; absent when the source did not provide it (fake datasets). */
+  readonly registry?: CustomerRegistryData;
   readonly name: string;
   readonly tradeName: string | null;
   readonly document: string | null;

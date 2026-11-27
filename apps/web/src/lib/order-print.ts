@@ -1,5 +1,5 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
-import { documentFreightLabels, documentStatusLabels, documentIpiPercent, documentKindOf, orderDocumentConditions, renderOrderHtml, toOrderDocument, type DocumentTopRules, type OrderDocumentCompany } from "@salesforce/domain";
+import { documentFreightLabels, documentStatusLabels, documentIpiPercent, documentKindOf, orderDocumentConditions, renderOrderHtml, resolveDocumentCarrier, toOrderDocument, type DocumentTopRules, type OrderDocumentCompany, type OrderDocumentCustomerRegistry } from "@salesforce/domain";
 
 type OrderDetail = ApiSchema<"OrderDetail">;
 
@@ -19,6 +19,12 @@ export interface OrderPrintExtras {
   sellerName?: string;
   /** `brand.company` of the runtime configuration; absent = no company block. */
   company?: OrderDocumentCompany;
+  /** Name of the order's own carrier (resolved from `carrierCode` in the carriers list); absent = falls back to the customer's default. */
+  carrierName?: string | null;
+  /** Default carrier of the customer, from the Sankhya registry. */
+  customerDefaultCarrierName?: string | null;
+  /** Registry data of the customer (mirror or what the Force recorded); absent fields print a dash. */
+  customerRegistry?: OrderDocumentCustomerRegistry;
 }
 
 export function buildOrderHtml(order: OrderDetail, origin: string, extras: OrderPrintExtras = {}): string {
@@ -28,6 +34,8 @@ export function buildOrderHtml(order: OrderDetail, origin: string, extras: Order
     erpNumber: order.erpNumber,
     customerCode: order.customerCode,
     customerName: order.customerName,
+    customerRegistry: extras.customerRegistry ?? {},
+    carrierName: resolveDocumentCarrier(extras.carrierName, extras.customerDefaultCarrierName),
     conditions: orderDocumentConditions({
       negotiationTypeCode: order.negotiationTypeCode,
       ...(extras.negotiationTypes === undefined ? {} : { negotiationTypes: extras.negotiationTypes }),

@@ -76,15 +76,15 @@ describe("sendPhaseOf", () => {
 });
 
 describe("saleExplanation", () => {
-  it("states where the order is, without technical jargon", () => {
-    expect(saleExplanation(draftRecord({ status: "local_only" }))).toMatch(/salvo neste aparelho. ainda não foi enviado ao Sankhya/i);
-    expect(saleExplanation(draftRecord({ status: "pending_sync", sendState: "requested" }))).toMatch(/será enviado ao Sankhya/i);
-    expect(saleExplanation(draftRecord({ status: "synced", remoteId: "r1", sendState: "submitted", sendCode: "sent" }))).toMatch(/enviado ao Sankhya/i);
-    expect(saleExplanation(draftRecord({ status: "synced", remoteId: "r1", sendState: "refused", sendError: "Cliente sem vendedor." }))).toMatch(/Precisa de correção\. Cliente sem vendedor\. Corrija/);
+  it("has no passive status text; only an actionable send error", () => {
+    expect(saleExplanation(draftRecord({ status: "local_only" }))).toBeNull();
+    expect(saleExplanation(draftRecord({ status: "pending_sync", sendState: "requested" }))).toBeNull();
+    expect(saleExplanation(draftRecord({ status: "synced", remoteId: "r1", sendState: "submitted", sendCode: "sent" }))).toBeNull();
+    expect(saleExplanation(draftRecord({ status: "synced", remoteId: "r1", sendState: "refused", sendError: "Cliente sem vendedor." }))).toBeNull();
     expect(saleExplanation(draftRecord({ status: "sync_error", lastError: "O servidor recusou este pedido." }))).toMatch(/recusou/);
-    expect(saleExplanation(draftRecord({ status: "conflict" }))).toMatch(/nada foi sobrescrito/i);
-    expect(saleExplanation(draftRecord({ status: "needs_review" }))).toMatch(/preços mudaram/i);
-    for (const status of ALL) expect(saleExplanation(draftRecord({ status }))).not.toMatch(/idempot|outbox|payload|HTTP|rascunho|\b[45]\d\d\b/i);
+    expect(saleExplanation(draftRecord({ status: "conflict" }))).toBeNull();
+    expect(saleExplanation(draftRecord({ status: "needs_review" }))).toBeNull();
+    for (const status of ALL) expect(saleExplanation(draftRecord({ status })) ?? "").not.toMatch(/idempot|outbox|payload|HTTP|rascunho|\b[45]\d\d\b/i);
   });
 });
 
@@ -171,10 +171,10 @@ describe("saleActions", () => {
 });
 
 describe("saleActionableExplanation", () => {
-  it("is silent for plain progress and explains what the seller must fix", () => {
+  it("is silent for every status and only states a seller-caused send failure", () => {
     expect(saleActionableExplanation(draftRecord({ status: "local_only" }))).toBeNull();
-    expect(saleActionableExplanation(draftRecord({ status: "needs_review" }))).toMatch(/preços mudaram/);
-    expect(saleActionableExplanation(draftRecord({ status: "conflict" }))).toMatch(/alterado em outro lugar/);
+    expect(saleActionableExplanation(draftRecord({ status: "needs_review" }))).toBeNull();
+    expect(saleActionableExplanation(draftRecord({ status: "conflict" }))).toBeNull();
   });
 });
 
@@ -189,9 +189,8 @@ describe("rejected (Precisa de correção)", () => {
     expect(saleActions(numbered).continue).toBe(false);
   });
 
-  it("shows the same reason the site shows under 'Precisa de correção' when the server sent one", () => {
-    const withReason = draftRecord({ ...base, sendError: "Frete não informado" });
-    expect(saleExplanation(withReason)).toBe("Precisa de correção. Frete não informado. Edite o pedido e confirme de novo.");
-    expect(saleExplanation(draftRecord({ ...base, sendError: null }))).toBe("Precisa de correção. Edite o pedido e confirme de novo.");
+  it("shows no explanatory text, only the badge", () => {
+    expect(saleExplanation(draftRecord({ ...base, sendError: "Frete não informado" }))).toBeNull();
+    expect(saleExplanation(draftRecord({ ...base, sendError: null }))).toBeNull();
   });
 });

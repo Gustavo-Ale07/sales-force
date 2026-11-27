@@ -79,7 +79,8 @@ describe('RealSankhyaGateway equals the FakeGateway on the validated reads', () 
     const { gateway } = setup({ pageSize: 120 });
     const fake = new FakeGateway();
     expect((await collect(gateway.readSellers())).rows).toEqual((await collect(fake.readSellers())).rows);
-    expect((await collect(gateway.readCustomers())).rows).toEqual((await collect(fake.readCustomers())).rows);
+    // The ERP also delivers registry data (spike 9.70); the fake dataset has none, so it is compared without it.
+    expect((await collect(gateway.readCustomers())).rows.map(({ registry: _registry, ...rest }) => rest)).toEqual((await collect(fake.readCustomers())).rows);
     expect((await collect(gateway.readProducts())).rows).toEqual((await collect(fake.readProducts())).rows);
     expect((await collect(gateway.readPriceTableVersions())).rows).toEqual((await collect(fake.readPriceTableVersions())).rows);
     expect((await collect(gateway.readListPrices())).rows).toEqual((await collect(fake.readListPrices())).rows);

@@ -297,6 +297,12 @@ export const OrderListItemSchema = named(
     erpDelivery: z.object({ errorClass: z.string(), errorCode: z.string().nullable(), message: z.string().max(200).nullable().optional() }).nullable().optional(),
     /** `null` unless the draft needs review (its customer became ineligible). Clients show it and block sending. */
     review: OrderReviewSchema.nullable(),
+    /**
+     * Owner ruling 2026-11-27 ("Editar pedido"): true only when the order may be edited by delete-and-recreate in Sankhya (still
+     * not confirmed, invoiced or financially settled there). A hint from the worker mirror; the worker revalidates live before
+     * deleting. Absent = false. Additive.
+     */
+    canEdit: z.boolean().optional(),
     version: z.number().int().min(1),
     createdAt: IsoTimestampSchema,
     updatedAt: IsoTimestampSchema,
@@ -536,6 +542,21 @@ export const ReplaceOrderRequestSchema = named(
   }),
 );
 export type ReplaceOrderRequest = z.infer<typeof ReplaceOrderRequestSchema>;
+
+/**
+ * `POST /orders/{id}/edit` (owner ruling 2026-11-27): edit an order already sent to Sankhya by deleting the unconfirmed note and
+ * recreating it. Same body as a replace plus the idempotency key of the command (a repeated tap with the same key does nothing new).
+ */
+export const EditOrderRequestSchema = named(
+  'EditOrderRequest',
+  z.strictObject({
+    clientRequestId: UuidSchema,
+    expectedVersion: z.number().int().min(1),
+    expectedDataset: expectedDatasetField,
+    ...orderDraftFields,
+  }),
+);
+export type EditOrderRequest = z.infer<typeof EditOrderRequestSchema>;
 
 /**
  * `POST /customers/{code}/orders/repeat-last`. One `clientRequestId` per user action (it becomes the

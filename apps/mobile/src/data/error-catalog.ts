@@ -58,6 +58,7 @@ export const ERROR_CATALOG = {
   version_conflict: { title: "Pedido alterado em outro lugar", message: "Recarregue para ver a versão atual. Suas alterações não salvas serão perdidas.", action: "reload" },
   order_not_editable: { title: "Pedido não editável", message: "Ele já não pode ser editado. Recarregue para ver a situação.", action: "reload" },
   not_editable: { title: "Pedido não editável", message: "Ele já não pode ser editado. Recarregue para ver a situação.", action: "reload" },
+  not_editable_in_erp: { title: "Pedido não pode ser editado", message: "O Sankhya não permite editar este pedido agora (já confirmado ou em andamento). Use Duplicar para criar outro.", action: "none" },
   idempotency_conflict: { title: "Pedido antigo", message: "Esta solicitação já foi registrada com outros dados. Refaça o pedido.", action: "none" },
   dataset_mismatch: { title: "Dados desatualizados", message: "O servidor mudou desde que você abriu o pedido. Sincronize e abra o pedido de novo.", action: "go_sync" },
   installation_not_enabled: { title: "Pedidos não habilitados", message: "A instalação ainda não aceita pedidos. Fale com o backoffice.", action: "none" },

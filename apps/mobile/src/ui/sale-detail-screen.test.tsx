@@ -99,6 +99,55 @@ describe("SaleDetailScreen in erp discount mode (D-L)", () => {
   });
 });
 
+describe("SaleDetailScreen Editar (EDIT-1)", () => {
+  const sent = draftRecord({ localId: "x", status: "synced", remoteId: "r-x", remoteVersion: 2, remoteDraftNumber: 9, sendState: "submitted", sendCode: "sent" });
+  const show = (canEdit: boolean | undefined, onEdit = jest.fn(), connectivity: "online" | "offline" = "online") =>
+    renderWithModal(
+      <SaleDetailScreen
+        localId="x"
+        localOrders={fakeLocalOrders([sent], { open: async () => ({ draft: sent, lines: [] }) })}
+        connectivity={connectivity}
+        orders={fakeOrders({ get: async () => orderDetail({ id: "r-x", ...(canEdit === undefined ? {} : { canEdit }) }) })}
+        onBack={noop}
+        onChanged={noop}
+        onContinue={noop}
+        onDuplicate={noop}
+        onEdit={onEdit}
+        onSyncNow={noop}
+      />,
+    );
+
+  it("shows Editar only when the server says canEdit and opens the editor on the server order", async () => {
+    const onEdit = jest.fn();
+    await show(true, onEdit);
+    fireEvent.press(await screen.findByRole("button", { name: "Editar" }));
+    expect(onEdit).toHaveBeenCalledWith("r-x");
+  });
+
+  it("shows only Duplicar, with no explanation, when canEdit is false or absent", async () => {
+    await show(false);
+    expect(await screen.findByRole("button", { name: "Duplicar pedido" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Editar" })).toBeNull();
+  });
+
+  it("does not offer Editar when canEdit is absent", async () => {
+    await show(undefined);
+    expect(await screen.findByRole("button", { name: "Duplicar pedido" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Editar" })).toBeNull();
+  });
+
+  it("says 'Sem conexão' instead of queueing when offline", async () => {
+    const onEdit = jest.fn();
+    const orders = fakeOrders({ get: async () => orderDetail({ id: "r-x", canEdit: true }) });
+    const { rerender } = await renderWithModal(<SaleDetailScreen localId="x" localOrders={fakeLocalOrders([sent], { open: async () => ({ draft: sent, lines: [] }) })} connectivity="online" orders={orders} onBack={noop} onChanged={noop} onContinue={noop} onDuplicate={noop} onEdit={onEdit} onSyncNow={noop} />);
+    await screen.findByRole("button", { name: "Editar" });
+    rerender(<SaleDetailScreen localId="x" localOrders={fakeLocalOrders([sent], { open: async () => ({ draft: sent, lines: [] }) })} connectivity="offline" orders={orders} onBack={noop} onChanged={noop} onContinue={noop} onDuplicate={noop} onEdit={onEdit} onSyncNow={noop} />);
+    fireEvent.press(await screen.findByRole("button", { name: "Editar" }));
+    expect(await screen.findByText("Sem conexão")).toBeTruthy();
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+});
+
 describe("SaleDetailScreen Duplicar como pedido (D-B)", () => {
   const base = orderEntryConfiguration();
   const config = orderEntryConfiguration({ sales: { ...base.sales, orderTops: { defaultTopCode: 1001, quotationTopCode: 1000, eligibleTopCodes: [1000, 1001] } } });

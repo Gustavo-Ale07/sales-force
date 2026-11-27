@@ -49,6 +49,13 @@ export interface CustomerRow {
   readonly taxId: string | null;
   readonly phone?: string | null;
   readonly email?: string | null;
+  readonly city?: string | null;
+  readonly state?: string | null;
+  readonly postalCode?: string | null;
+  readonly street?: string | null;
+  readonly addressNumber?: string | null;
+  readonly complement?: string | null;
+  readonly neighborhood?: string | null;
   readonly active: boolean;
   readonly blockedRaw: string | null;
   readonly sellerCode: number | null;
@@ -200,6 +207,13 @@ export class MirrorRepository {
         taxId: erpCustomer.taxId,
         phone: erpCustomer.phone,
         email: erpCustomer.email,
+        city: erpCustomer.city,
+        state: erpCustomer.state,
+        postalCode: erpCustomer.postalCode,
+        street: erpCustomer.street,
+        addressNumber: erpCustomer.addressNumber,
+        complement: erpCustomer.complement,
+        neighborhood: erpCustomer.neighborhood,
         active: erpCustomer.active,
         blockedRaw: erpCustomer.blockedRaw,
         sellerCode: erpCustomer.sellerCode,

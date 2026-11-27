@@ -1,6 +1,7 @@
 import {
   META_KEYS,
   confirmDataset,
+  getCachedCustomer,
   getCachedProduct,
   isCacheReady,
   readExpectedDataset,
@@ -70,6 +71,10 @@ export function createOfflineFirstRepositories(deps: {
       async financial(code) {
         if (code < 0 || remote.customers.financial === undefined) return null;
         return remote.customers.financial(code);
+      },
+      async cached(code) {
+        if (code < 0 || !(await cacheReady())) return null;
+        return getCachedCustomer<CustomerListItem>(db, code);
       },
       async letters(request) {
         if (!(await cacheReady())) return [];

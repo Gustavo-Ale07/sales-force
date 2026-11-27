@@ -3,7 +3,8 @@ import { Button, toast } from "@salesforce/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { Printer } from "lucide-react";
 import { useState } from "react";
-import { orderEntryConfigurationQueryOptions, orderQueryOptions } from "../lib/api-queries";
+import type { OrderDocumentCustomerRegistry } from "@salesforce/domain";
+import { carriersQueryOptions, customerQueryOptions, orderEntryConfigurationQueryOptions, orderQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { describeApiError } from "../lib/error-message";
 import { buildOrderHtml } from "../lib/order-print";
@@ -37,9 +38,27 @@ export function PrintOrderButton({ orderId, label, order, disabled, size = "md",
         .then((configuration) => configuration.sales)
         .catch(() => undefined);
       const tops = sales?.orderTops;
+      // Registry data and default carrier of the customer (spike 9.70): a failed read prints dashes, never blocks the PDF.
+      // The fields are read tolerantly: they are optional in the contract and absent from older servers.
+      const customer = (await queryClient
+        .fetchQuery(customerQueryOptions(api, detail.customerCode))
+        .catch(() => null)) as (ApiSchema<"CustomerDetail"> & { registry?: OrderDocumentCustomerRegistry; defaultCarrierCode?: string | null }) | null;
+      const defaultCarrierCode = customer?.defaultCarrierCode ?? null;
+      const carriers =
+        detail.carrierCode === null && defaultCarrierCode === null
+          ? []
+          : await queryClient
+              .fetchQuery(carriersQueryOptions(api))
+              .then((list) => list.items)
+              .catch(() => []);
+      const carrierName = detail.carrierCode === null ? null : (carriers.find((carrier) => carrier.code === detail.carrierCode)?.name ?? null);
+      const customerDefaultCarrierName = defaultCarrierCode === null ? null : (carriers.find((carrier) => String(carrier.code) === defaultCarrierCode)?.name ?? null);
       printHtml(
         buildOrderHtml(detail, window.location.origin, {
           issuedAt: new Date().toISOString(),
+          carrierName,
+          customerDefaultCarrierName,
+          ...(customer?.registry === undefined ? {} : { customerRegistry: customer.registry }),
           ...(sales === undefined ? {} : { negotiationTypes: sales.negotiationTypes }),
           ...(tops === undefined ? {} : { topRules: { quoteTopCodes: tops.quoteTopCodes, quotationTopCode: tops.quotationTopCode } }),
         }),

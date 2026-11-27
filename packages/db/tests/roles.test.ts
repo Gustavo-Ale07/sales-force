@@ -43,10 +43,12 @@ const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
   sync_state: { api: S, worker: SIU },
   sync_refresh: { api: SIU, worker: ['SELECT', 'UPDATE'] },
   sales_order: { api: SIUD, worker: ['SELECT', 'UPDATE'] },
-  sales_order_item: { api: SIUD, worker: S },
+  sales_order_item: { api: SIUD, worker: SID },
   sales_order_approval: { api: SIU, worker: [] },
   // Order stage (0040): the worker writes the last known Sankhya stage; the API only reads it.
-  sales_order_erp_stage: { api: S, worker: SIU },
+  sales_order_erp_stage: { api: S, worker: SIUD },
+  // Order edit history (0065): the worker records each replaced NUNOTA; the API only reads it for the order DTO.
+  sales_order_erp_history: { api: S, worker: ['SELECT', 'INSERT'] },
   // Release queue (0041): the worker mirrors the pending lines and deletes the released ones; the API only reads.
   sales_order_release_pending: { api: S, worker: SIUD },
   customer_order_template: { api: SIU, worker: [] },
@@ -374,6 +376,14 @@ describe('db-roles.sql', () => {
     expect(await sqlState('force_worker', `UPDATE customer_registration SET status = 'rejected', rejection_code = 'x', updated_at = now() - interval '90 days' WHERE id = '${id}'`)).toBeUndefined();
     expect((await as<{ ok: boolean }>(adminDbUrl, `SELECT updated_at > now() - interval '1 minute' AS ok FROM customer_registration WHERE id = $1`, [id]))[0]!.ok).toBe(true);
     expect(await sqlState('force_worker', `DELETE FROM customer_registration WHERE id = '${id}'`)).toBeDefined();
+  });
+
+  it('customer registry columns (0066): the API reads them, only the worker writes them, no new grant needed', async () => {
+    const columns = 'postal_code, street, address_number, complement, neighborhood';
+    expect(await sqlState('force_api', `SELECT ${columns} FROM erp_customer`)).toBeUndefined();
+    expect(await sqlState('force_api', `UPDATE erp_customer SET street = 'x'`)).toBeDefined();
+    expect(await sqlState('force_worker', `SELECT ${columns} FROM erp_customer`)).toBeUndefined();
+    expect(await sqlState('force_worker', `UPDATE erp_customer SET street = street, postal_code = postal_code WHERE false`)).toBeUndefined();
   });
 
   it('api: reads and writes only its own data; cannot DDL, truncate, drop, alter or write the mirror', async () => {
