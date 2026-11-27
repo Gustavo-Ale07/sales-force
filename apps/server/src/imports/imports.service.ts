@@ -375,7 +375,7 @@ export class ImportsService {
   }
 
   private async addressOf(user: CurrentUser, row: CustomerRowText): Promise<{ addresses: unknown[]; error: string | null }> {
-    if (row.postalCode === '') return { addresses: [], error: null };
+    if (row.postalCode === '') return { addresses: [], error: 'Informe o CEP.' };
     const cep = onlyDigits(row.postalCode);
     if (!/^\d{8}$/.test(cep)) return { addresses: [], error: 'CEP inválido.' };
     let found;

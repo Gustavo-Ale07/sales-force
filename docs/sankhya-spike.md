@@ -1192,3 +1192,31 @@ Owner SELECT after the first write: `TSIUSU.FOTO` of CODUSU 0 held 35,040 bytes 
 The customer form needs the label of each ICMS classification (C, I, P, R, T, X; R default, owner B6). No validated source of the NAMES exists in this document or in `packages/sankhya`. Proposed read-only check, to run by the integration engineer in the Sandbox only: the Sankhya field dictionary, `SELECT O.VALOR, O.OPCAO FROM TDDOPC O JOIN TDDCAM C ON C.NUCAMPO = O.NUCAMPO WHERE C.NOMETAB = 'TGFPAR' AND C.NOMECAMPO = 'CLASSIFICMS' ORDER BY O.ORDEM` (table and column names of the dictionary NOT validated here). Until validated, the server exposes no label list and clients show the code as typed by the owner (B6).
 
 **Validated (owner read of the Sandbox field dictionary, 2026-11-25):** C = Consumidor Final Não Contribuinte; I = Isento de ICMS; P = Produtor Rural; R = Revendedor; T = Usar a da TOP; X = Consumidor Final Contribuinte. The list lives in `ICMS_CLASSIFICATION_LABELS` (`packages/contracts`), used by site and app; the value sent stays the letter, R is the default.
+
+### 9.67 Sondagem de alteração de pedido existente (Sandbox, 2026-11-27) — VALIDATED (Sandbox); desfecho: nenhum caminho seguro
+
+Sonda única autorizada pelo dono (SNK-6 respeitado: escrita real só no Sandbox). Pedido de teste NUNOTA 2514, cliente 6001, produto 4158, TOP 1001, empresa 1, pagamento 11, origem `AD_FORCEORIGEM = 'f2probe-alter-0001'`; apagado ao final via `excluirNotas`.
+
+- `CACSP.alterarItens`: não documentado e não testado.
+- `CACSP.incluirAlterarItemNota` (nota `NUNOTA` string simples; item `NUNOTA {"$":"2514"}`, `SEQUENCIA {"$":"1"}`): altera `QTDNEG` e `VLRUNIT` no mesmo NUNOTA sem duplicar, mas NÃO recalcula `VLRTOT`, `VLRNOTA`, IPI nem `TGFFIN` e não cria `TSILIB`. Recusa item novo: `Item Nota/Pedido nao existe: PK[2514,2]`.
+- `DatasetSP.save` em `TGFITE`: mesmo comportamento; sem PK insere linha com `VLRTOT` 0.
+- `CACSP.excluirItemNota`: remove o item sem recalcular.
+- `DatasetSP.save` em `TGFCAB`: não testado.
+- Erro = HTTP 200 com `status` '0' + `statusMessage` em texto (classe validation).
+- Repetir a mesma alteração dá o mesmo resultado (mas o pedido fica inconsistente).
+- Origin-id na alteração: NÃO testado (NEEDS VALIDATION).
+- Falta um serviço de recálculo de totais/financeiro (pedir ao suporte Sankhya: NEEDS VALIDATION).
+- Alternativa validada: excluir o pedido não confirmado (F-51) e recriar com `incluirNota` (novo NUNOTA).
+
+### 9.68 Fatos do Sandbox para configuração própria, metas e positivação (VALIDATED, Sandbox, 2026-11-27)
+
+- `TGFPAR.TIPGERBOLCENT` CHAR(1) anulável: NULL 5906, 'I' 61, 'A' 30.
+- `TGFBAR`: 17 linhas, `CODBARRA` com 13 dígitos.
+- `TGFMET`: 47 linhas, todas `CODVEND` 0, `CODMETA` 3, `CODPROD` > 0; não há meta de vendedor nem linha geral.
+- `AD_FORCECFG` (`ID` NUMBER(10) NOT NULL, `DIASSEMSYNC`, `CODTABPADRAO`) e `AD_FORCELIMDESC` (`ID`, `SEQ` NOT NULL, `CODVEND`, `CODGRUPOPROD`, `CODPROD`, `DESCMAX` FLOAT) existem, vazias e agora sem uso (CFG-9).
+- `TGFVEN.DESCMAX`: sem valor nos 83 vendedores. `TGFPRO.DESCMAX`: com valor em 2298 de 3993 produtos (2 a 100).
+- `TSICEP`: PK composta, com CEPs repetidos.
+- `TGFTOP.AD_MOBILIDADE = 'S'` só em 1000, 1001, 1051 e 2209 (todas `TIPMOV` P, ativas); as 47 TOPs V não têm mobilidade.
+- 110 pedidos dessas TOPs têm nota filha em `TGFVAR` (`NUNOTAORIG` -> `NUNOTA`); filhas faturadas nas TOPs 1101 (79), 1151 (5), 1156 (1), 1951 (9); última em 13/08/2026; novembro sem nota V.
+- `TGFCAB.CANCELADO` é sempre nulo nas notas V.
+- `CODTAB` nulo em 6001-6004, contra 5 nos 5183 ativos.

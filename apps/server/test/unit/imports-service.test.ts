@@ -215,6 +215,17 @@ describe('customer batch import', () => {
     expect(result.errors).toEqual([{ row: 2, reason: 'E-mail inválido.' }]);
   });
 
+  it('refuses a row without CEP before writing anything', async () => {
+    const { service, registered } = build();
+    const content = b64(`${header}529.982.247-25;Sem CEP;;1\n`);
+    const preview = await service.preview(user, { type: 'customers', fileName: 'c.csv', contentBase64: content });
+    expect(preview.errors).toEqual([{ row: 2, reason: 'Informe o CEP.' }]);
+    const result = await service.confirm(user, { type: 'customers', fileName: 'c.csv', contentBase64: content, clientRequestId: REQUEST_ID });
+    expect(result.created).toBe(0);
+    expect(result.errors).toEqual([{ row: 2, reason: 'Informe o CEP.' }]);
+    expect(registered).toHaveLength(0);
+  });
+
   it('rejects an unknown CEP and caps one import at 30 customers', async () => {
     const { service } = build();
     const preview = await service.preview(user, { type: 'customers', fileName: 'c.csv', contentBase64: b64(`${header}529.982.247-25;Um;99999999;1\n`) });

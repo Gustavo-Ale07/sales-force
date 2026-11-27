@@ -121,3 +121,26 @@ Decisoes do dono consideradas (nao reabertas): Sankhya e a fonte de verdade; apr
 8. IMP-1/2/3/5, ORD-9, W-29/30, M-25: assistente de importacao.
 9. W-33/34/35/37: usuarios, equipes, perfis, auditoria (telas admin).
 10. INT-1: consulta de CNPJ com cache; ACC-2/W-08: abas Analise e Engajamento.
+
+## Atualizacao 2026-11-27 (staging em 838c400e, Sandbox)
+
+Esta secao prevalece sobre as tabelas acima onde divergirem (elas sao da auditoria de 26/11).
+
+**FEITO**
+- Configuracao propria do Force (CFG-9, `decisions.md` §3.22): `force_config` e `seller_discount_rule` (migracao 0063), telas `/parametros` e `/descontos-representante` (admin/gestor).
+- Limites de desconto por representante (cadeia: produto > subgrupo > grupo pai > geral do representante > `TGFPRO.DESCMAX` > sem limite) e sua tela; sync dos limites no app (`/discount-limits/mine`) e dos parametros (`/devices/me`: `offlineMaxDays`, `defaultPriceTableCode`). Substitui W-39 "4 niveis" e a leitura de `AD_FORCECFG`/`AD_FORCELIMDESC`/`TGFVEN.DESCMAX`.
+- Tabela de preco no cadastro/edicao de cliente (CODTAB obrigatorio, 422 `price_table_not_found`), site e app.
+- Metas (linha geral OU soma dos produtos; migracao 0061) e positivacao (via TGFVAR; migracao 0062): GOL-1 e GOL-2 no servidor.
+
+**PENDENTE**
+- Editar pedido: so Duplicar; falta servico de recalculo de totais/financeiro do Sankhya (`sankhya-spike.md` §9.67).
+- Busca global no app.
+- APK 0.3.0 publicado em /downloads: arquivos prontos; falta permissao de escrita em `/opt/force-staging/downloads` (pasta de root). Depois, remover a flag `SF_ALLOW_LEGACY_APP_LOGIN`.
+- Tela `/configuracoes` ainda diz "Edite no Sankhya": contradiz CFG-9; trocar o texto.
+- Revalidar a tabela de preco no worker na entrega (LOW).
+- Quantidade realizada das metas retorna null.
+- Painel de metas so no app (excecao declarada previa).
+- 1 aparelho por conta.
+- Bloqueio de desconto no servidor so audita (decisao: CFG-9).
+- Aparelho: conferir se o wipe de revogacao limpa `offlineMaxDays` e a tabela padrao.
+- Ainda FALTA (sem mudanca): GOL-3 comissoes, e os demais itens nao citados acima.

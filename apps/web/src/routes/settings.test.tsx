@@ -52,7 +52,8 @@ describe("W-38 settings (read-only)", () => {
 
   it("shows each value with its origin, the banner and the sync state for a sankhya snapshot", async () => {
     renderApp("/configuracoes", { handlers: { "GET /configuration": { body: sankhyaSnapshot } }, role: "admin" });
-    expect(await screen.findByText(/Edite no Sankhya; o Force lê a cada 15 min/)).toBeInTheDocument();
+    expect(await screen.findByText("Concluída")).toBeInTheDocument();
+    expect(screen.queryByText(/Edite no Sankhya/)).not.toBeInTheDocument();
     expect(screen.getByText("Concluída")).toBeInTheDocument();
     for (const group of ["Geral", "Vendas", "Clientes", "Produtos", "Preços", "Financeiro", "Sankhya"]) {
       expect(screen.getAllByText(group).length).toBeGreaterThan(0);
@@ -67,7 +68,7 @@ describe("W-38 settings (read-only)", () => {
 
   it("has no editing control", async () => {
     renderApp("/configuracoes", { handlers: { "GET /configuration": { body: sankhyaSnapshot } }, role: "admin" });
-    await screen.findByText("Edite no Sankhya");
+    await screen.findByText("Concluída");
     expect(screen.queryAllByRole("textbox")).toHaveLength(0);
     expect(screen.queryAllByRole("spinbutton")).toHaveLength(0);
     expect(screen.queryByRole("button", { name: /salvar/i })).not.toBeInTheDocument();

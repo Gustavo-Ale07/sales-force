@@ -186,9 +186,6 @@ function SettingsView({ data }: { data: ApiSchema<"ConfigurationResponse"> }) {
   const status = sync === undefined ? { label: "Desligada", tone: "neutral" as Tone } : syncLabels[sync.status];
   return (
     <>
-      <Alert tone="info" title="Edite no Sankhya">
-        Edite no Sankhya; o Force lê a cada 15 min. Nada nesta tela é editável.
-      </Alert>
       <Card>
         <CardHeader title="Última sincronização da configuração" actions={<StatusBadge tone={status.tone}>{status.label}</StatusBadge>} />
         <CardBody>
