@@ -1,4 +1,4 @@
-import { replaceCities, replaceNeighborhoods, replaceStreets } from "./address-cache";
+import { replaceCities, replaceCustomerPriceTables, replaceNeighborhoods, replaceStreets } from "./address-cache";
 import type { SqlDatabase, SqlRow } from "./connection";
 import { DatasetIdentityError, confirmDataset, readCacheDataset, readExpectedDataset, sameDataset, writeCacheDataset, type DatasetIdentity } from "./dataset-identity";
 import { countOutbox, draftErpNumber, getDraft, listAttentionItems, listOutbox, type AttentionItem, type DraftRecord } from "./local-orders";
@@ -53,6 +53,8 @@ export interface ReferenceSource extends OrderStatusSource, ServerOrdersSource {
   fetchCities?(): Promise<readonly unknown[]>;
   fetchNeighborhoods?(): Promise<readonly unknown[]>;
   fetchStreets?(): Promise<readonly unknown[]>;
+  /** Price tables a customer may be given and the installation default (`GET /customer-price-tables`): `{items, defaultCode}`. Best-effort: a failure keeps the previous list. */
+  fetchCustomerPriceTables?(): Promise<unknown>;
   /**
    * On-demand refresh (POST /sync/refresh, then follow it until done). The manager calls it BEFORE any download and downloads only
    * after it returns. Optional so a source without it just downloads. Throws `TransportError` when the server cannot be reached.
@@ -236,6 +238,12 @@ export async function pullReferenceData(
   const cities = await bestEffort(source.fetchCities?.bind(source));
   const neighborhoods = await bestEffort(source.fetchNeighborhoods?.bind(source));
   const streets = await bestEffort(source.fetchStreets?.bind(source));
+  let customerPriceTables: unknown = null;
+  try {
+    customerPriceTables = (await source.fetchCustomerPriceTables?.()) ?? null;
+  } catch {
+    customerPriceTables = null;
+  }
   onStep({ id: "save", state: "running", count: null });
   const now = isoNow(env);
   await db.transaction(async (tx) => {
@@ -270,6 +278,8 @@ export async function pullReferenceData(
     else if (datasetChanged) await replaceNeighborhoods(tx, []);
     if (streets !== null) await replaceStreets(tx, streets);
     else if (datasetChanged) await replaceStreets(tx, []);
+    if (customerPriceTables !== null) await replaceCustomerPriceTables(tx, customerPriceTables, now);
+    else if (datasetChanged) await replaceCustomerPriceTables(tx, {}, now);
     if (datasetChanged) await tx.execute("DELETE FROM cache_postal_code");
     await setMeta(tx, META_KEYS.cacheOwner, ownerAccountId, now);
   });

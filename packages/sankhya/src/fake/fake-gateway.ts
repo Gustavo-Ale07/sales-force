@@ -50,6 +50,7 @@ import { PLAC_CONFIGURATION_FACTS } from './configuration-facts-fixture.js';
 import { getDemoDataset, type DemoDataset } from './demo-data.js';
 import {
   buildDemoSalesNotes,
+  demoPositivationOrders,
   demoSalesHistoryCustomerProduct,
   demoSalesHistoryMonthly,
   type DemoSalesNote,
@@ -191,6 +192,9 @@ export class FakeGateway implements SankhyaGateway {
   }
   readSellerGoals(options?: ReadOptions) {
     return this.#snapshot('sellerGoals', this.#dataset.sellerGoals, options);
+  }
+  readPositivationOrders(options?: ReadOptions) {
+    return this.#snapshot('positivationOrders', demoPositivationOrders(this.#notes()), options);
   }
   readIpiRates(options?: ReadOptions) {
     return this.#snapshot('ipiRates', this.#dataset.ipiRates, options);
@@ -400,7 +404,7 @@ export class FakeGateway implements SankhyaGateway {
   readPartnerEditableFields(code: number, options?: PartnerCallOptions): Promise<PartnerEditableFields | null> {
     return this.#order(options, () => {
       const stored = this.#partners.read(code);
-      return stored === null ? null : { phone: stored.request.phone, email: stored.request.email, notes: stored.request.notes };
+      return stored === null ? null : { phone: stored.request.phone, email: stored.request.email, notes: stored.request.notes, priceTableCode: stored.request.priceTableCode };
     });
   }
 

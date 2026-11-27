@@ -69,7 +69,7 @@ describe('customer origin key (idempotency)', () => {
 
 describe('customer edit policy (allow-list)', () => {
   it('lists only phone, e-mail, contacts, addresses and notes', () => {
-    expect([...CUSTOMER_EDITABLE_FIELDS].sort()).toEqual(['addresses', 'contacts', 'email', 'notes', 'phone']);
+    expect([...CUSTOMER_EDITABLE_FIELDS].sort()).toEqual(['addresses', 'contacts', 'email', 'notes', 'phone', 'priceTableCode']);
   });
 
   it('rejects every other field, even when the client sends it', () => {

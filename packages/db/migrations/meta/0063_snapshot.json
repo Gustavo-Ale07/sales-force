@@ -1,6 +1,6 @@
 {
-  "id": "77c14484-7b51-4282-9cc2-995cc5d176cb",
-  "prevId": "d406057e-d873-47be-9c94-7b5691e0c3ff",
+  "id": "b0441f16-078f-40a5-bf9a-911c3a2b48c7",
+  "prevId": "8493b08c-fdad-45e9-a727-7f7bcad779bc",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2108,6 +2108,79 @@
       },
       "isRLSEnabled": false
     },
+    "public.erp_positivation_order": {
+      "name": "erp_positivation_order",
+      "schema": "",
+      "columns": {
+        "customer_code": {
+          "name": "customer_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seller_code": {
+          "name": "seller_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "month": {
+          "name": "month",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "order_number": {
+          "name": "order_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "synced_at": {
+          "name": "synced_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "erp_positivation_order_month_idx": {
+          "name": "erp_positivation_order_month_idx",
+          "columns": [
+            {
+              "expression": "month",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "erp_positivation_order_pk": {
+          "name": "erp_positivation_order_pk",
+          "columns": [
+            "customer_code",
+            "order_number",
+            "month"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "erp_positivation_order_month_chk": {
+          "name": "erp_positivation_order_month_chk",
+          "value": "extract(day from \"erp_positivation_order\".\"month\") = 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.erp_postal_code": {
       "name": "erp_postal_code",
       "schema": "",
@@ -2955,6 +3028,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "goal_scope": {
+          "name": "goal_scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'products'"
+        },
         "synced_at": {
           "name": "synced_at",
           "type": "timestamp with time zone",
@@ -2985,13 +3065,18 @@
           "name": "erp_seller_goal_pk",
           "columns": [
             "seller_code",
-            "month"
+            "month",
+            "goal_scope"
           ]
         }
       },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
+        "erp_seller_goal_scope_chk": {
+          "name": "erp_seller_goal_scope_chk",
+          "value": "\"erp_seller_goal\".\"goal_scope\" in ('general', 'products')"
+        },
         "erp_seller_goal_values_chk": {
           "name": "erp_seller_goal_values_chk",
           "value": "\"erp_seller_goal\".\"revenue_target\" >= 0 and \"erp_seller_goal\".\"quantity_target\" >= 0 and extract(day from \"erp_seller_goal\".\"month\") = 1"
@@ -5757,6 +5842,217 @@
         "push_device_platform_chk": {
           "name": "push_device_platform_chk",
           "value": "\"push_device\".\"platform\" in ('android', 'ios')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.force_config": {
+      "name": "force_config",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "smallint",
+          "primaryKey": true,
+          "notNull": true,
+          "default": 1
+        },
+        "max_days_without_sync": {
+          "name": "max_days_without_sync",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 7
+        },
+        "default_price_table_code": {
+          "name": "default_price_table_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 5
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "force_config_updated_by_account_id_fk": {
+          "name": "force_config_updated_by_account_id_fk",
+          "tableFrom": "force_config",
+          "tableTo": "account",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "force_config_singleton_chk": {
+          "name": "force_config_singleton_chk",
+          "value": "\"force_config\".\"id\" = 1"
+        },
+        "force_config_max_days_chk": {
+          "name": "force_config_max_days_chk",
+          "value": "\"force_config\".\"max_days_without_sync\" between 1 and 60"
+        },
+        "force_config_price_table_chk": {
+          "name": "force_config_price_table_chk",
+          "value": "\"force_config\".\"default_price_table_code\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.seller_discount_rule": {
+      "name": "seller_discount_rule",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "seller_code": {
+          "name": "seller_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_kind": {
+          "name": "target_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_code": {
+          "name": "target_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_percent": {
+          "name": "max_percent",
+          "type": "numeric(7, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "seller_discount_rule_target_uidx": {
+          "name": "seller_discount_rule_target_uidx",
+          "columns": [
+            {
+              "expression": "seller_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "target_kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "coalesce(\"target_code\", 0)",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "seller_discount_rule_seller_idx": {
+          "name": "seller_discount_rule_seller_idx",
+          "columns": [
+            {
+              "expression": "seller_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "seller_discount_rule_updated_by_account_id_fk": {
+          "name": "seller_discount_rule_updated_by_account_id_fk",
+          "tableFrom": "seller_discount_rule",
+          "tableTo": "account",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "seller_discount_rule_kind_chk": {
+          "name": "seller_discount_rule_kind_chk",
+          "value": "\"seller_discount_rule\".\"target_kind\" in ('product', 'subgroup', 'group', 'none')"
+        },
+        "seller_discount_rule_target_chk": {
+          "name": "seller_discount_rule_target_chk",
+          "value": "(\"seller_discount_rule\".\"target_kind\" = 'none' and \"seller_discount_rule\".\"target_code\" is null) or (\"seller_discount_rule\".\"target_kind\" <> 'none' and \"seller_discount_rule\".\"target_code\" is not null and \"seller_discount_rule\".\"target_code\" > 0)"
+        },
+        "seller_discount_rule_percent_chk": {
+          "name": "seller_discount_rule_percent_chk",
+          "value": "\"seller_discount_rule\".\"max_percent\" >= 0 and \"seller_discount_rule\".\"max_percent\" <= 100"
+        },
+        "seller_discount_rule_seller_chk": {
+          "name": "seller_discount_rule_seller_chk",
+          "value": "\"seller_discount_rule\".\"seller_code\" > 0"
         }
       },
       "isRLSEnabled": false

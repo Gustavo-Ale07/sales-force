@@ -177,7 +177,7 @@ describe('CustomerUpdateDeliveryService (D-AP)', () => {
   });
 
   it('editApplied treats an empty value as null', () => {
-    expect(editApplied({ notes: null }, { phone: null, email: null, notes: '' })).toBe(true);
-    expect(editApplied({ phone: '1' }, { phone: '2', email: null, notes: null })).toBe(false);
+    expect(editApplied({ notes: null }, { phone: null, email: null, notes: '', priceTableCode: 5 })).toBe(true);
+    expect(editApplied({ phone: '1' }, { phone: '2', email: null, notes: null, priceTableCode: 5 })).toBe(false);
   });
 });

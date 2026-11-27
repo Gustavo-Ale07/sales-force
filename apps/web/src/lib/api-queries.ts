@@ -24,6 +24,8 @@ export const queryKeys = {
   configuration: ["configuration"] as const,
   orderEntryConfiguration: ["order-entry-configuration"] as const,
   discountLimits: ["discount-limits"] as const,
+  forceSettings: ["force-config"] as const,
+  sellerDiscountRules: ["seller-discount-rules"] as const,
   myDiscountLimits: ["my-discount-limits"] as const,
   devices: ["devices"] as const,
   deviceSettings: ["device-settings"] as const,
@@ -86,6 +88,21 @@ export function discountLimitsQueryOptions(api: ApiClient) {
   return queryOptions({
     queryKey: queryKeys.discountLimits,
     queryFn: () => callApi(() => api.GET("/discount-limits")),
+  });
+}
+
+export function forceSettingsQueryOptions(api: ApiClient) {
+  return queryOptions({
+    queryKey: queryKeys.forceSettings,
+    queryFn: () => callApi(() => api.GET("/force-config")),
+  });
+}
+
+/** Per-seller discount rules, all or one seller's (admin and manager). */
+export function sellerDiscountRulesQueryOptions(api: ApiClient, sellerCode?: number) {
+  return queryOptions({
+    queryKey: [...queryKeys.sellerDiscountRules, sellerCode ?? null] as const,
+    queryFn: () => callApi(() => api.GET("/seller-discount-rules", { params: { query: sellerCode === undefined ? {} : { sellerCode } } })),
   });
 }
 
@@ -163,6 +180,10 @@ const REGISTRY_STALE_MS = 60 * 60_000;
 
 export function citiesQueryOptions(api: ApiClient) {
   return queryOptions({ queryKey: ["address", "cities"] as const, queryFn: () => callApi(() => api.GET("/cities")), staleTime: REGISTRY_STALE_MS });
+}
+
+export function customerPriceTablesQueryOptions(api: ApiClient) {
+  return queryOptions({ queryKey: ["customer", "price-tables"] as const, queryFn: () => callApi(() => api.GET("/customer-price-tables")), staleTime: REGISTRY_STALE_MS });
 }
 
 export function neighborhoodsQueryOptions(api: ApiClient) {

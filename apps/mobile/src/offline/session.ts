@@ -38,7 +38,7 @@ export interface OfflineSessionStore {
   remember(account: Account): Promise<void>;
   /** The limit the server reported for this device (AUTH-2); survives the next offline start. */
   rememberOfflineMaxDays(days: number): Promise<void>;
-  /** Price table of a customer without one (AD_FORCECFG via the device status); optional for ports that never hear it. */
+  /** Price table of a customer without one (Force configuration via the device status); optional for ports that never hear it. */
   rememberDefaultPriceTable?(code: number): Promise<void>;
   /** Sign-out: the device no longer opens without an online login. Drafts and the outbox are kept. */
   forget(): Promise<void>;

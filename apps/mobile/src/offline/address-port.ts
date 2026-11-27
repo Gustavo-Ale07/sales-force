@@ -1,11 +1,13 @@
 import {
   getCachedPostalCode,
+  getCustomerPriceTables,
   isoNow,
   putCachedPostalCode,
   searchCities,
   searchNeighborhoods,
   searchStreets,
   type CachedCity,
+  type CachedCustomerPriceTables,
   type CachedNeighborhood,
   type CachedPostalCode,
   type CachedStreet,
@@ -20,6 +22,8 @@ export interface AddressPort {
   searchCities(query: string): Promise<readonly CachedCity[]>;
   searchNeighborhoods(query: string): Promise<readonly CachedNeighborhood[]>;
   searchStreets(query: string): Promise<readonly CachedStreet[]>;
+  /** Price tables of the customer form and the installation default, from the last sync (works offline). */
+  customerPriceTables(): Promise<CachedCustomerPriceTables>;
   /**
    * The address of an 8-digit CEP: asks the server and remembers an answer that found it; offline, on any failure or when the server does
    * not find it, answers from the local memory, otherwise `null` (the form then simply stays free: no text, no error). Never throws.
@@ -44,6 +48,7 @@ export function createAddressPort(deps: { readonly db: SqlDatabase; readonly env
     searchCities: (query) => searchCities(db, query),
     searchNeighborhoods: (query) => searchNeighborhoods(db, query),
     searchStreets: (query) => searchStreets(db, query),
+    customerPriceTables: () => getCustomerPriceTables(db).catch(() => ({ items: [], defaultCode: null })),
     async lookupPostalCode(cep) {
       if (!/^\d{8}$/.test(cep)) return null;
       try {

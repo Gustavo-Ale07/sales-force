@@ -34,7 +34,7 @@ export interface CustomerUpdateConfirmation {
   readonly claimed: ClaimedCustomerUpdate;
   readonly customerCode: number;
   /** The editable columns as the ERP stores them (the reread). */
-  readonly fields: { readonly phone: string | null; readonly email: string | null; readonly notes: string | null };
+  readonly fields: { readonly phone: string | null; readonly email: string | null; readonly notes: string | null; readonly priceTableCode: number | null };
   readonly at: Date;
 }
 
@@ -125,7 +125,7 @@ export class DrizzleCustomerUpdateDeliveryStore implements CustomerUpdateDeliver
         .set({ status: 'confirmed', nextAttemptAt: null, lastStep: 'confirmed', lastErrorClass: null, lastErrorMessage: null, erpReference: String(customerCode), updatedAt: at })
         .where(eq(integrationOutbox.id, claimed.outboxId));
       // The mirror shows the edit at once; the next customers sync rewrites it from the ERP when its hash differs.
-      await tx.update(erpCustomer).set({ phone: fields.phone, email: fields.email }).where(eq(erpCustomer.code, customerCode));
+      await tx.update(erpCustomer).set({ phone: fields.phone, email: fields.email, ...(fields.priceTableCode === null ? {} : { priceTableCode: fields.priceTableCode }) }).where(eq(erpCustomer.code, customerCode));
       await this.audit.record(
         { action: AUDIT_ACTIONS.customerUpdateDelivered, actorAccountId: null, detail: { updateId: claimed.updateId, outboxId: claimed.outboxId, customerCode, attempts: claimed.attemptCount } },
         tx,

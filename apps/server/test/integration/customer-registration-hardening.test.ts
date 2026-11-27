@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { auditLog, customerRegistration, customerRegistrationRefusal, erpCustomer, integrationOutbox } from '@salesforce/db';
+import { auditLog, customerRegistration, customerRegistrationRefusal, erpCustomer, erpPriceTable, forceConfig, integrationOutbox } from '@salesforce/db';
 import { CreateCustomerRequestSchema } from '@salesforce/contracts';
 import { DEMO_ACCOUNT_EMAILS } from '@salesforce/sankhya';
 import { eq, sql } from 'drizzle-orm';
@@ -38,6 +38,9 @@ beforeAll(async () => {
   seller1 = ctx.accounts.ids[DEMO_ACCOUNT_EMAILS.seller1] as string;
   seller2 = ctx.accounts.ids[DEMO_ACCOUNT_EMAILS.seller2] as string;
   manager = ctx.accounts.ids[DEMO_ACCOUNT_EMAILS.manager] as string;
+  // The Force default price table (own configuration) must be a table of the mirror.
+  const [firstTable] = await ctx.database.handle.db.select({ code: erpPriceTable.code }).from(erpPriceTable).where(eq(erpPriceTable.active, true)).limit(1);
+  await ctx.database.handle.db.update(forceConfig).set({ defaultPriceTableCode: firstTable!.code });
 }, 180_000);
 afterAll(async () => {
   await closeAllThenStop(opened, postgres);

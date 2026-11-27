@@ -674,6 +674,386 @@
         }
       }
     },
+    "/force-config": {
+      "get": {
+        "operationId": "getForceSettings",
+        "tags": [
+          "configuration"
+        ],
+        "summary": "Force configuration: days without sync and default price table (admin and manager)",
+        "responses": {
+          "200": {
+            "description": "Configuração do Force",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForceSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateForceSettings",
+        "tags": [
+          "configuration"
+        ],
+        "summary": "Replace the Force configuration (admin and manager, audited)",
+        "description": "The default price table must exist in the ERP price-table mirror (400 otherwise).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateForceSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Configuração salva",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForceSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/seller-discount-rules": {
+      "get": {
+        "operationId": "listSellerDiscountRules",
+        "tags": [
+          "configuration"
+        ],
+        "summary": "Per-seller discount rules, optionally of one seller (admin and manager)",
+        "parameters": [
+          {
+            "name": "sellerCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Regras de desconto por representante",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellerDiscountRulesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createSellerDiscountRule",
+        "tags": [
+          "configuration"
+        ],
+        "summary": "Create a per-seller discount rule (admin and manager, audited)",
+        "description": "409 when the same (seller, target kind, target) already has a rule; 400 for an unknown seller or an invalid target.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSellerDiscountRuleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Regra criada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellerDiscountRuleRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/seller-discount-rules/{id}": {
+      "put": {
+        "operationId": "updateSellerDiscountRule",
+        "tags": [
+          "configuration"
+        ],
+        "summary": "Change the percent of a per-seller discount rule (admin and manager, audited)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSellerDiscountRuleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Regra atualizada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellerDiscountRuleRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteSellerDiscountRule",
+        "tags": [
+          "configuration"
+        ],
+        "summary": "Delete a per-seller discount rule (admin and manager, audited)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Regra excluída"
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/devices/me": {
       "get": {
         "operationId": "getMyDevice",
@@ -2504,6 +2884,47 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CitiesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customer-price-tables": {
+      "get": {
+        "operationId": "listCustomerPriceTables",
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Active price tables with mobility (code, name) for the customer registration, ordered by name",
+        "responses": {
+          "200": {
+            "description": "Tabelas de preço do cadastro de cliente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerPriceTablesResponse"
                 }
               }
             }
@@ -7784,6 +8205,10 @@
               }
             ]
           },
+          "priceTableCode": {
+            "type": "integer",
+            "minimum": 0
+          },
           "addresses": {
             "default": [],
             "maxItems": 3,
@@ -7972,6 +8397,40 @@
           "expectedDataset",
           "name",
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "CreateSellerDiscountRuleRequest": {
+        "type": "object",
+        "properties": {
+          "sellerCode": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "targetKind": {
+            "$ref": "#/components/schemas/DiscountRuleTargetKind"
+          },
+          "targetCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxPercent": {
+            "type": "string",
+            "pattern": "^(100(\\.0+)?|\\d{1,2}(\\.\\d{1,4})?)$"
+          }
+        },
+        "required": [
+          "sellerCode",
+          "targetKind",
+          "targetCode",
+          "maxPercent"
         ],
         "additionalProperties": false
       },
@@ -8635,6 +9094,50 @@
         ],
         "additionalProperties": false
       },
+      "CustomerPriceTable": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerPriceTablesResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomerPriceTable"
+            }
+          },
+          "defaultCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "defaultCode"
+        ],
+        "additionalProperties": false
+      },
       "CustomerReasonCode": {
         "type": "string",
         "enum": [
@@ -9145,6 +9648,15 @@
         ],
         "additionalProperties": false
       },
+      "DiscountRuleTargetKind": {
+        "type": "string",
+        "enum": [
+          "product",
+          "subgroup",
+          "group",
+          "none"
+        ]
+      },
       "DuplicateAsOrderRequest": {
         "type": "object",
         "properties": {
@@ -9278,6 +9790,29 @@
           "READ_ONLY",
           "IGNORED_UNTIL_NEEDED"
         ]
+      },
+      "ForceSettings": {
+        "type": "object",
+        "properties": {
+          "maxDaysWithoutSync": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          },
+          "defaultPriceTableCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          }
+        },
+        "required": [
+          "maxDaysWithoutSync",
+          "defaultPriceTableCode",
+          "updatedAt"
+        ],
+        "additionalProperties": false
       },
       "FreightType": {
         "type": "string",
@@ -13706,6 +14241,7 @@
         "enum": [
           "general",
           "group",
+          "subgroup",
           "product"
         ]
       },
@@ -13735,6 +14271,79 @@
           "kind",
           "code",
           "percent"
+        ],
+        "additionalProperties": false
+      },
+      "SellerDiscountRuleRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "sellerCode": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sellerName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "targetKind": {
+            "$ref": "#/components/schemas/DiscountRuleTargetKind"
+          },
+          "targetCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targetName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "maxPercent": {
+            "type": "string",
+            "pattern": "^(100(\\.0+)?|\\d{1,2}(\\.\\d{1,4})?)$"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          }
+        },
+        "required": [
+          "id",
+          "sellerCode",
+          "sellerName",
+          "targetKind",
+          "targetCode",
+          "targetName",
+          "maxPercent",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "SellerDiscountRulesResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SellerDiscountRuleRecord"
+            }
+          }
+        },
+        "required": [
+          "items"
         ],
         "additionalProperties": false
       },
@@ -14573,6 +15182,10 @@
               }
             ]
           },
+          "priceTableCode": {
+            "type": "integer",
+            "minimum": 0
+          },
           "contacts": {
             "maxItems": 10,
             "type": "array",
@@ -14674,6 +15287,38 @@
         "required": [
           "expectedRevision",
           "limits"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateForceSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "maxDaysWithoutSync": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          },
+          "defaultPriceTableCode": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "maxDaysWithoutSync",
+          "defaultPriceTableCode"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateSellerDiscountRuleRequest": {
+        "type": "object",
+        "properties": {
+          "maxPercent": {
+            "type": "string",
+            "pattern": "^(100(\\.0+)?|\\d{1,2}(\\.\\d{1,4})?)$"
+          }
+        },
+        "required": [
+          "maxPercent"
         ],
         "additionalProperties": false
       },

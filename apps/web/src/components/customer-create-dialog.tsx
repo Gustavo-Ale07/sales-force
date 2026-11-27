@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState, type FormEvent } from "react";
 import { applyCnpjLookup } from "../lib/customer-cnpj";
-import { citiesQueryOptions, cnpjQueryOptions, neighborhoodsQueryOptions, postalCodeQueryOptions, sellersQueryOptions, streetsQueryOptions } from "../lib/api-queries";
+import { citiesQueryOptions, cnpjQueryOptions, customerPriceTablesQueryOptions, neighborhoodsQueryOptions, postalCodeQueryOptions, sellersQueryOptions, streetsQueryOptions } from "../lib/api-queries";
 import { useApi, useAppServices } from "../lib/app-context";
 import { sessionQueryOptions } from "../lib/auth-client";
 import {
@@ -83,11 +83,19 @@ function CreateBody({ onClose }: { onClose: () => void }) {
   const cities = useQuery(citiesQueryOptions(api));
   const neighborhoods = useQuery(neighborhoodsQueryOptions(api));
   const streets = useQuery(streetsQueryOptions(api));
+  const priceTables = useQuery(customerPriceTablesQueryOptions(api));
+  const priceTableList = useMemo(() => priceTables.data?.items ?? [], [priceTables.data]);
+  const defaultPriceTable = priceTables.data?.defaultCode ?? null;
   const cityList = useMemo(() => cities.data?.items ?? [], [cities.data]);
   const neighborhoodList = useMemo(() => neighborhoods.data?.items ?? [], [neighborhoods.data]);
   const streetList = useMemo(() => streets.data?.items ?? [], [streets.data]);
   const icmsOptions = useIcmsOptions();
-  const [form, setForm] = useState<CreateForm>(emptyCreateForm);
+  const [typedForm, setForm] = useState<CreateForm>(emptyCreateForm);
+  // Until the person chooses, the field shows the installation default.
+  const form = useMemo<CreateForm>(
+    () => (typedForm.priceTableCode === null && defaultPriceTable !== null ? { ...typedForm, priceTableCode: defaultPriceTable } : typedForm),
+    [typedForm, defaultPriceTable],
+  );
   const [step, setStep] = useState(0);
   const [showProblems, setShowProblems] = useState(false);
   const problems = createProblems(form, needsSeller);
@@ -103,6 +111,7 @@ function CreateBody({ onClose }: { onClose: () => void }) {
     "street",
     "number",
     "complement",
+    "priceTableCode",
     ...(natural ? [] : ["tradeName", "stateRegistration"]),
     ...(needsSeller ? ["sellerCode"] : []),
   ];
@@ -297,6 +306,20 @@ function CreateBody({ onClose }: { onClose: () => void }) {
         ) : null}
         {step === 2 ? (
           <div className="grid gap-3" data-testid="create-step-3">
+            <FormField label="Tabela de preço" required error={fieldError(problems.priceTableCode, "priceTableCode")}>
+              <Select
+                value={form.priceTableCode === null ? "" : String(form.priceTableCode)}
+                disabled={priceTables.isPending}
+                onChange={(event) => set({ priceTableCode: event.target.value === "" ? null : Number(event.target.value) })}
+              >
+                <option value="">Selecione</option>
+                {priceTableList.map((table) => (
+                  <option key={table.code} value={table.code}>
+                    {table.name}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
             {needsSeller ? (
               <FormField label="Vendedor" required error={fieldError(problems.sellerCode, "sellerCode")}>
                 <SellerPicker

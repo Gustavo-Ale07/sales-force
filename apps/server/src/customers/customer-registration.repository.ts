@@ -4,12 +4,15 @@ import {
   customerRegistrationRefusal,
   erpCity,
   erpCustomer,
+  forceConfig,
+  erpPriceTable,
   erpNeighborhood,
   erpSeller,
   erpStreet,
   integrationOutbox,
   type Database,
 } from '@salesforce/db';
+import { resolveForceConfig } from '@salesforce/domain';
 import { and, desc, eq, gte, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import type { RegistrationOutboxFacts } from './customer-registration-view.js';
 import { isBlockedRaw } from '../mirror/mirror.repository.js';
@@ -140,6 +143,26 @@ export class CustomerRegistrationRepository {
 
   async streetRegistry(db: Executor = this.db): Promise<{ code: number; name: string; kind: string | null }[]> {
     return db.select({ code: erpStreet.code, name: erpStreet.name, kind: erpStreet.kind }).from(erpStreet).where(isNull(erpStreet.deletedAt));
+  }
+
+  /** P-08: the table is an active, non-deleted row of the price-table mirror (which holds only tables with mobility). */
+  async activePriceTableExists(code: number, db: Executor = this.db): Promise<boolean> {
+    if (!Number.isInteger(code) || code < 0 || code > 2_147_483_647) return false;
+    const rows = await db
+      .select({ code: erpPriceTable.code })
+      .from(erpPriceTable)
+      .where(and(eq(erpPriceTable.code, code), eq(erpPriceTable.active, true), isNull(erpPriceTable.deletedAt)))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  /** The installation default price table: the Force own configuration (owner ruling 2026-11-27), with the domain fallback. */
+  async defaultPriceTableCode(db: Executor = this.db): Promise<number> {
+    const [row] = await db
+      .select({ maxDaysWithoutSync: forceConfig.maxDaysWithoutSync, defaultPriceTableCode: forceConfig.defaultPriceTableCode })
+      .from(forceConfig)
+      .where(eq(forceConfig.id, 1));
+    return resolveForceConfig(row ?? null).defaultPriceTableCode;
   }
 
   async activeSellerExists(code: number, db: Executor = this.db): Promise<boolean> {

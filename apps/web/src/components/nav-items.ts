@@ -1,9 +1,9 @@
 import { canAdministerDiscountLimits, canDecideApprovals, canSeeIntegration, canUseCommercial } from "@salesforce/contracts";
 import { isOperationsRole, OPERATIONS_HOME } from "../lib/operations-role";
-import { Bell, CalendarCheck, Hourglass, House, Package, Percent, Plug, Settings, ShieldCheck, ShoppingCart, Smartphone, Target, UserRound, Users, type LucideIcon } from "lucide-react";
+import { Bell, CalendarCheck, Hourglass, House, Package, Percent, Plug, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal, Smartphone, Target, UserRound, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
-  to: "/" | "/perfil" | "/clientes" | "/produtos" | "/pedidos" | "/integracao" | "/configuracoes" | "/limites-desconto" | "/aparelhos" | "/aprovacoes" | "/aguardando-liberacao" | "/tarefas" | "/notificacoes" | "/metas";
+  to: "/" | "/perfil" | "/clientes" | "/produtos" | "/pedidos" | "/integracao" | "/configuracoes" | "/limites-desconto" | "/parametros" | "/descontos-representante" | "/aparelhos" | "/aprovacoes" | "/aguardando-liberacao" | "/tarefas" | "/notificacoes" | "/metas";
   label: string;
   icon: LucideIcon;
   /** Only for the roles that may see the integration (INTEGRATION_ROLES). */
@@ -36,6 +36,8 @@ const allNavItems: NavItem[] = [
   { to: "/aguardando-liberacao", label: "Aguardando liberação", icon: Hourglass, releaseQueueOnly: true },
   { to: "/aprovacoes", label: "Aprovações", icon: ShieldCheck, approverOnly: true },
   { to: "/limites-desconto", label: "Limites de desconto", icon: Percent, adminOnly: true },
+  { to: "/descontos-representante", label: "Descontos por representante", icon: Percent, devicesOnly: true },
+  { to: "/parametros", label: "Parâmetros", icon: SlidersHorizontal, devicesOnly: true },
   { to: "/aparelhos", label: "Aparelhos", icon: Smartphone, devicesOnly: true },
   { to: "/integracao", label: "Integração", icon: Plug, integrationOnly: true },
   { to: "/configuracoes", label: "Configurações", icon: Settings, integrationOnly: true },

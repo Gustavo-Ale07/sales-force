@@ -77,10 +77,10 @@ describe('real adapter: updatePartner / readPartnerEditableFields', () => {
 
   it('rereads the three editable columns by CODPARC; empty = null; absent partner = null', async () => {
     const { gateway, mock } = realHarness();
-    mock.forced.push(ok(['CODPARC', 'TELEFONE', 'EMAIL', 'OBSERVACOES'], [[77, '11988887777', null, 'obs']]));
-    expect(await gateway.readPartnerEditableFields(77)).toEqual({ phone: '11988887777', email: null, notes: 'obs' });
-    expect(mock.queries()[0]?.sql).toBe('SELECT CODPARC, TELEFONE, EMAIL, OBSERVACOES FROM TGFPAR WHERE CODPARC = 77');
-    mock.forced.push(ok(['CODPARC', 'TELEFONE', 'EMAIL', 'OBSERVACOES'], []));
+    mock.forced.push(ok(['CODPARC', 'TELEFONE', 'EMAIL', 'OBSERVACOES', 'CODTAB'], [[77, '11988887777', null, 'obs', 5]]));
+    expect(await gateway.readPartnerEditableFields(77)).toEqual({ phone: '11988887777', email: null, notes: 'obs', priceTableCode: 5 });
+    expect(mock.queries()[0]?.sql).toBe('SELECT CODPARC, TELEFONE, EMAIL, OBSERVACOES, CODTAB FROM TGFPAR WHERE CODPARC = 77');
+    mock.forced.push(ok(['CODPARC', 'TELEFONE', 'EMAIL', 'OBSERVACOES', 'CODTAB'], []));
     expect(await gateway.readPartnerEditableFields(78)).toBeNull();
     await expect(gateway.readPartnerEditableFields(0)).rejects.toMatchObject({ kind: 'validation' });
   });
@@ -109,7 +109,7 @@ describe('fake gateway: edit of a partner written through the Force', () => {
     const code = partners.seed(base);
     const gateway = new FakeGateway({ partners });
     await gateway.updatePartner({ code, changes: { phone: '11977776666', notes: 'nova' } });
-    expect(await gateway.readPartnerEditableFields(code)).toEqual({ phone: '11977776666', email: 'a@example.test', notes: 'nova' });
+    expect(await gateway.readPartnerEditableFields(code)).toEqual({ phone: '11977776666', email: 'a@example.test', notes: 'nova', priceTableCode: 5 });
     await gateway.updatePartner({ code, changes: { email: null } });
     expect((await gateway.readPartnerEditableFields(code))?.email).toBeNull();
     expect(partners.count('update')).toBe(2);

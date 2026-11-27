@@ -4,12 +4,14 @@ import {
   clearReferenceCache,
   createPendingCustomer,
   getCachedPostalCode,
+  getCustomerPriceTables,
   getPendingCustomer,
   migrations,
   pullReferenceData,
   pushPendingCustomers,
   putCachedPostalCode,
   replaceCities,
+  replaceCustomerPriceTables,
   runMigrations,
   searchCities,
   searchNeighborhoods,
@@ -74,6 +76,14 @@ describe("address lists (cities, neighborhoods, streets)", () => {
     expect(await searchCities(db, "")).toHaveLength(3);
     await pullReferenceData(db, env, sourceOf(SANDBOX, { fetchCities: async () => { throw new Error("down"); } }), A);
     expect(await searchCities(db, "")).toHaveLength(0);
+  });
+
+  it("keeps the customer price tables and the default, by name, and cleans them with the cache", async () => {
+    expect(await getCustomerPriceTables(db)).toEqual({ items: [], defaultCode: null });
+    await db.transaction((tx) => replaceCustomerPriceTables(tx, { items: [{ code: 7, name: "Atacado" }, { code: 5, name: "Padrão" }, { code: 9, name: " " }], defaultCode: 5 }, "2026-11-27T00:00:00.000Z"));
+    expect(await getCustomerPriceTables(db)).toEqual({ items: [{ code: 7, name: "Atacado" }, { code: 5, name: "Padrão" }], defaultCode: 5 });
+    await clearReferenceCache(db);
+    expect(await getCustomerPriceTables(db)).toEqual({ items: [], defaultCode: null });
   });
 
   it("is cleaned with the reference cache and the wipe", async () => {

@@ -39,9 +39,8 @@ const TABLES: Record<MirrorEntity, string> = {
   neighborhoods: 'erp_neighborhood',
   streets: 'erp_street',
   postalCodes: 'erp_postal_code',
-  forceConfig: 'erp_force_config',
-  forceDiscountLimits: 'erp_force_discount_limit',
   sellerGoals: 'erp_seller_goal',
+  positivationOrders: 'erp_positivation_order',
   ipiRates: 'erp_ipi_rate',
   openTitles: 'erp_open_title',
   salesHistoryMonthly: 'erp_sales_history_monthly',
@@ -113,9 +112,9 @@ function datasetCopy(): { -readonly [K in keyof DemoDataset]: DemoDataset[K][num
     neighborhoods: [...source.neighborhoods],
     streets: [...source.streets],
     postalCodes: [...source.postalCodes],
+    sellerGoals: [...source.sellerGoals],
     forceConfig: [...source.forceConfig],
     forceDiscountLimits: [...source.forceDiscountLimits],
-    sellerGoals: [...source.sellerGoals],
     ipiRates: [...source.ipiRates],
     openTitles: [...source.openTitles],
     customers: [...source.customers],
@@ -511,7 +510,7 @@ describe('mirror jobs through pg-boss (retry / dead-letter)', () => {
       for (const entity of MIRROR_ENTITIES) {
         const expected = ['cities', 'neighborhoods', 'streets', 'postalCodes'].includes(entity)
           ? DEFAULT_MIRROR_CRONS.addresses
-          : entity === 'sellerGoals'
+          : entity === 'sellerGoals' || entity === 'positivationOrders'
             ? DEFAULT_MIRROR_CRONS.goals
             : '0 3 * * *';
         expect(registered.find((schedule) => schedule.name === mirrorQueueName(entity))?.cron).toBe(expected);

@@ -20,6 +20,8 @@ export interface CustomerEditChanges {
   readonly phone?: string;
   readonly email?: string;
   readonly notes?: string;
+  /** ERP price table (CODTAB); present only when the seller changed it. */
+  readonly priceTableCode?: number;
 }
 
 /** The ERP's version of the contact data when a conflict was detected. */

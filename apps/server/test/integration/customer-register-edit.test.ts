@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { auditLog, customerRegistration, erpCustomer, integrationOutbox } from '@salesforce/db';
+import { auditLog, customerRegistration, erpCustomer, erpPriceTable, forceConfig, integrationOutbox } from '@salesforce/db';
 import { and, eq, like, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { requeueStuckCustomers } from '../../src/customers/customer-requeue.js';
@@ -24,6 +24,9 @@ beforeAll(async () => {
   open = await startCommercialApp(postgres, opened, { customerEnqueueEnabled: true, customerEditEnabled: true, customerConfirmWait: NO_WAIT });
   // A second installation with every flag at its shipped value (closed).
   closed = await startCommercialApp(postgres, opened);
+  // The Force default price table (own configuration) must be a table of the mirror: point it at the first mirrored one.
+  const [firstTable] = await open.database.handle.db.select({ code: erpPriceTable.code }).from(erpPriceTable).where(eq(erpPriceTable.active, true)).limit(1);
+  await open.database.handle.db.update(forceConfig).set({ defaultPriceTableCode: firstTable!.code });
 }, 240_000);
 afterAll(async () => {
   await closeAllThenStop(opened, postgres);
@@ -134,6 +137,23 @@ describe('create: state machine seen by the client', () => {
     expect(rows).toHaveLength(0);
     expect((await open.call('seller1', 'POST', '/customers', createBody({ sellerCode: undefined }))).status).toBe(202);
   });
+
+  it('a price table outside the mirror is refused on priceTableCode and nothing is recorded; the chosen table reaches the command (P-08)', async () => {
+    const refusedBody = createBody({ priceTableCode: 987_654 });
+    const refused = await open.call('seller1', 'POST', '/customers', refusedBody);
+    expect(refused.status).toBe(422);
+    expect(refused.body.details.fields.priceTableCode).toEqual(expect.any(String));
+    expect(await db().select().from(customerRegistration).where(eq(customerRegistration.clientRequestId, refusedBody.clientRequestId))).toHaveLength(0);
+
+    const [table] = await db().select({ code: erpPriceTable.code }).from(erpPriceTable).where(eq(erpPriceTable.active, true)).limit(1);
+    if (table === undefined) throw new Error('fixture lacks an active price table');
+    const okBody = createBody({ priceTableCode: table.code });
+    const created = await open.call('seller1', 'POST', '/customers', okBody);
+    expect(created.status).toBe(202);
+    const [row] = await db().select().from(customerRegistration).where(eq(customerRegistration.clientRequestId, okBody.clientRequestId));
+    const [command] = await db().select().from(integrationOutbox).where(eq(integrationOutbox.aggregateId, row?.id ?? ''));
+    expect(command?.payload).toMatchObject({ priceTableCode: table.code });
+  });
 });
 
 describe('CUST-RT: legacy correction is ignored; the seller of a pending customer is set by a manager', () => {
@@ -234,7 +254,7 @@ describe('edit of an existing customer', () => {
 
   it('rejects every field outside the allow-list with a 400 that names it', async () => {
     const code = await customerOf(103);
-    for (const field of ['document', 'name', 'sellerCode', 'creditLimit', 'priceTableCode', 'icmsClassification', 'blocked']) {
+    for (const field of ['document', 'name', 'sellerCode', 'creditLimit', 'icmsClassification', 'blocked']) {
       const response = await open.call('seller1', 'PATCH', `/customers/${code}`, { clientRequestId: randomUUID(), phone: '11999990000', [field]: 'x' });
       expect(response.status, field).toBe(400);
       expect(response.body.details.issues.map((issue: Json) => issue.path), field).toContain(field);

@@ -15,6 +15,16 @@ export type City = z.infer<typeof CitySchema>;
 export const CitiesResponseSchema = named('CitiesResponse', z.object({ items: z.array(CitySchema) }));
 export type CitiesResponse = z.infer<typeof CitiesResponseSchema>;
 
+/** A customer price table (active and enabled for mobile), listed by name. Reference data: no cost, margin or personal data. */
+export const CustomerPriceTableSchema = named('CustomerPriceTable', z.object({ code: codeInt(), name: z.string() }));
+export type CustomerPriceTable = z.infer<typeof CustomerPriceTableSchema>;
+/** `defaultCode`: the installation default (the Force configuration) when it is one of the listed tables, else null; the screens start the field with it. */
+export const CustomerPriceTablesResponseSchema = named(
+  'CustomerPriceTablesResponse',
+  z.object({ items: z.array(CustomerPriceTableSchema), defaultCode: codeInt().nullable() }),
+);
+export type CustomerPriceTablesResponse = z.infer<typeof CustomerPriceTablesResponseSchema>;
+
 export const NeighborhoodSchema = named('Neighborhood', z.object({ code: codeInt(), name: z.string() }));
 export type Neighborhood = z.infer<typeof NeighborhoodSchema>;
 export const NeighborhoodsResponseSchema = named('NeighborhoodsResponse', z.object({ items: z.array(NeighborhoodSchema) }));

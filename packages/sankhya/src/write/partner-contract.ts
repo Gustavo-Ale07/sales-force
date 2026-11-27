@@ -43,7 +43,7 @@ export interface PartnerWriteRequest {
   readonly stateRegistration: string | null;
   /** The account's seller (or the one a manager/admin chose). */
   readonly sellerCode: number | null;
-  /** Default price table of the installation (configuration, not a literal). */
+  /** The price table (TGFPAR.CODTAB) chosen in the registration, validated against the mirror by the server. Never null at the wire (owner 2026-11-27). */
   readonly priceTableCode: number | null;
   readonly phone: string | null;
   readonly email: string | null;
@@ -76,6 +76,8 @@ export interface PartnerEditableChanges {
   readonly phone?: string | null;
   readonly email?: string | null;
   readonly notes?: string | null;
+  /** TGFPAR.CODTAB (owner 2026-11-27): a present key replaces the price table; never null (a customer is never left without one). */
+  readonly priceTableCode?: number;
   /** Never mapped: present only so that the adapter can refuse it by name (nothing is sent). */
   readonly contacts?: unknown;
   readonly addresses?: unknown;
@@ -92,6 +94,8 @@ export interface PartnerEditableFields {
   readonly phone: string | null;
   readonly email: string | null;
   readonly notes: string | null;
+  /** TGFPAR.CODTAB as stored; `null` = empty. */
+  readonly priceTableCode: number | null;
 }
 
 export interface SankhyaPartnerWritePort {

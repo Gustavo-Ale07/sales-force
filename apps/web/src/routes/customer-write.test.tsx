@@ -117,6 +117,7 @@ describe("Clientes: cadastro (D-AR)", () => {
     "GET /cities": { body: { items: [{ code: 10, name: "Sao Paulo", uf: "SP", ibge: null }, { code: 11, name: "Campinas", uf: "SP", ibge: null }] } },
     "GET /neighborhoods": { body: { items: [{ code: 4, name: "Bela Vista" }] } },
     "GET /streets": { body: { items: [{ code: 5, name: "Avenida Paulista", kind: "AVENIDA" }] } },
+    "GET /customer-price-tables": { body: { items: [{ code: 5, name: "Tabela Padrão" }, { code: 7, name: "Tabela Atacado" }], defaultCode: 5 } },
   };
   type User = ReturnType<typeof renderApp>["user"];
   const pickCity = async (user: User, dialog: HTMLElement) => {
@@ -291,7 +292,9 @@ describe("Clientes: cadastro (D-AR)", () => {
     const dialog = await screen.findByRole("dialog");
     await reachStep3(user, dialog);
     expect(within(dialog).getByLabelText("Vendedor")).toBeDisabled();
-    expect(within(dialog).queryByRole("combobox")).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("combobox", { name: /Vendedor/ })).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/Tabela de preço/)).toHaveValue("5");
+    expect(within(dialog).getByRole("option", { name: "Tabela Atacado" })).toBeInTheDocument();
   });
 
   it("a manager without a seller code must pick an active seller", async () => {

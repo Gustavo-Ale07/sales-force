@@ -135,7 +135,7 @@ export function toPendingListItem(record: PendingCustomerRecord): CustomerListIt
     blocked: false,
     sellerCode: seller,
     sellerName: null,
-    priceTableCode: null,
+    priceTableCode: record.request?.priceTableCode ?? null,
     pending: {
       clientRequestId: record.clientRequestId,
       state: record.state,

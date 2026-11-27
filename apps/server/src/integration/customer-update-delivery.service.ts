@@ -15,6 +15,7 @@ export const CustomerUpdateCommandSchema = z.object({
       phone: CustomerFieldSchemas.phone.nullable().optional(),
       email: CustomerFieldSchemas.email.nullable().optional(),
       notes: CustomerFieldSchemas.notes.nullable().optional(),
+      priceTableCode: z.number().int().min(0).optional(),
     })
     .strict(),
 });
@@ -38,7 +39,8 @@ const norm = (value: string | null | undefined): string | null => {
 
 /** Every changed field already holds the asked value in the ERP (an empty value equals `null`). */
 export function editApplied(changes: CustomerUpdateCommand['changes'], erp: PartnerEditableFields): boolean {
-  return KEYS.every((key) => changes[key] === undefined || norm(changes[key]) === norm(erp[key]));
+  const tableApplied = changes.priceTableCode === undefined || changes.priceTableCode === erp.priceTableCode;
+  return tableApplied && KEYS.every((key) => changes[key] === undefined || norm(changes[key]) === norm(erp[key]));
 }
 
 /**

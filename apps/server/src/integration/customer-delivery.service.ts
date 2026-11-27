@@ -25,6 +25,8 @@ export const CustomerUpsertCommandSchema = z.object({
   phone: CustomerFieldSchemas.phone.nullable(),
   email: CustomerFieldSchemas.email.nullable(),
   notes: CustomerFieldSchemas.notes.nullable(),
+  /** Absent only in commands stored before the field existed; the wire then falls back to the configured table and refuses when none. */
+  priceTableCode: z.number().int().min(0).optional(),
   addresses: z
     .array(
       z.object({
@@ -157,7 +159,7 @@ export class CustomerDeliveryService {
               icmsClassification: command.icmsClassification,
               stateRegistration: command.stateRegistration,
               sellerCode: command.sellerCode,
-              priceTableCode: settings.priceTableCode,
+              priceTableCode: command.priceTableCode ?? settings.priceTableCode,
               phone: command.phone,
               email: command.email,
               notes: command.notes,

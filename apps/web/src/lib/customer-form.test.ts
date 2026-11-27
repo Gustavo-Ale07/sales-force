@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildCreateBody, createProblems, emptyCreateForm, formFieldOfServerPath, matchCode, stepHasProblems, stepOfField } from "./customer-form";
+import { buildCreateBody, buildUpdateBody, createProblems, editProblems, emptyCreateForm, emptyEditForm, formFieldOfServerPath, matchCode, stepHasProblems, stepOfField } from "./customer-form";
 
 const CPF = "52998224725";
 const CNPJ = "11222333000181";
-const form = (patch: Partial<ReturnType<typeof emptyCreateForm>>) => ({ ...emptyCreateForm(), name: "Alfa", cityCode: 10, ...patch });
+const form = (patch: Partial<ReturnType<typeof emptyCreateForm>>) => ({ ...emptyCreateForm(), name: "Alfa", cityCode: 10, priceTableCode: 5, ...patch });
 
 describe("customer create form rules", () => {
   it("a natural person never gets a state-registration problem, nor sends one or a trade name", () => {
@@ -44,6 +44,23 @@ describe("customer create form rules", () => {
     expect(stepOfField("cityCode")).toBe(1);
     expect(stepOfField("sellerCode")).toBe(2);
     expect(stepOfField("document")).toBe(0);
+  });
+
+  it("the price table is mandatory, belongs to screen 3 and is sent as chosen", () => {
+    const missing = createProblems(form({ document: CNPJ, exempt: true, priceTableCode: null }));
+    expect(missing.priceTableCode).toBe("Escolha a tabela de preço.");
+    expect(stepHasProblems(missing, 2)).toBe(true);
+    expect(stepOfField("priceTableCode")).toBe(2);
+    expect(buildCreateBody("id", form({ document: CNPJ, priceTableCode: 7 })).priceTableCode).toBe(7);
+  });
+
+  it("editing sends the price table only when it changed", () => {
+    const same = emptyEditForm(5);
+    expect(buildUpdateBody("id", { ...same, phone: "11999990000" })).not.toHaveProperty("priceTableCode");
+    expect(editProblems(same).empty).not.toBeNull();
+    const changed = { ...same, priceTableCode: 8 };
+    expect(buildUpdateBody("id", changed).priceTableCode).toBe(8);
+    expect(editProblems(changed).empty).toBeNull();
   });
 
   it("sends registry codes for picked suggestions and free text otherwise", () => {

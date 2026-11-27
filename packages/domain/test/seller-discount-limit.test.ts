@@ -79,6 +79,26 @@ describe('resolveSellerDiscountLimit', () => {
     expect(resolve(rules, { productCode: 1, groupCode: null })).toEqual({ limit: '9', source: 'general' });
   });
 
+  it('a subgroup rule resolves like a group rule: nearest ancestor wins, the product rule is above both', () => {
+    const rules: SellerDiscountRule[] = [
+      { kind: 'subgroup', code: 11, percent: '5' },
+      { kind: 'group', code: 10, percent: '15' },
+    ];
+    expect(resolve(rules)).toEqual({ limit: '5', source: 'group', groupCode: 11 });
+    expect(resolve([...rules, { kind: 'product', code: 500, percent: '10' }])).toEqual({ limit: '10', source: 'product' });
+    // The more specific rule wins even when the group allows more (product 10 vs group 15).
+    expect(resolve([{ kind: 'group', code: 10, percent: '15' }, { kind: 'product', code: 500, percent: '10' }]).limit).toBe('10');
+  });
+
+  it('subgroup and group rules on the same code: the subgroup one wins', () => {
+    const rules: SellerDiscountRule[] = [
+      { kind: 'group', code: 11, percent: '9' },
+      { kind: 'subgroup', code: 11, percent: '2' },
+    ];
+    expect(resolve(rules)).toEqual({ limit: '2', source: 'group', groupCode: 11 });
+    expect(resolve([...rules].reverse())).toEqual({ limit: '2', source: 'group', groupCode: 11 });
+  });
+
   it('survives a cycle in the group tree', () => {
     const cyclic = new Map<number, number | null>([[1, 2], [2, 1]]);
     const out = resolveSellerDiscountLimit({

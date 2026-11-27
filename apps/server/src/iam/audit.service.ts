@@ -34,7 +34,10 @@ export const AUDIT_ACTIONS = {
   directorySessionRevoked: 'auth.directory.session_revoked',
   /** The admin changed the discount limits (W-39, DISC-3): previous and new values, never free text. */
   discountLimitsChanged: 'config.discount_limits_changed',
-  /** A manager or admin created, changed or removed one per-seller discount rule (seller, level, code and percents only). */
+  /** A manager or admin created, changed or removed one per-seller discount rule (seller, kind, code and percents only). */
+  sellerDiscountRuleChanged: 'config.seller_discount_rule_changed',
+  /** The Force configuration (days without sync, default price table) was changed on the site: previous and new values only. */
+  forceConfigChanged: 'config.force_changed',
   /** CFG-8: the worker stored a new configuration version read from Sankhya (versions, hashes, changed keys; no values). */
   configSankhyaSynced: 'config.sankhya_synced',
   orderCreated: 'order.created',

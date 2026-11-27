@@ -107,6 +107,13 @@ function positiveInt(value: number | null, field: string): void {
   }
 }
 
+/** A price table code: table 0 exists in the ERP, so 0 is valid. */
+function priceTableCodeValue(value: number, field: string): void {
+  if (!Number.isInteger(value) || value < 0 || value > 2_147_483_647) {
+    throw new PartnerFieldError('partner_invalid_field', field, 'CODTAB', `The field '${field}' must be a non-negative integer.`);
+  }
+}
+
 function required(value: string, field: string, column: string): void {
   if (value.trim() === '') {
     throw new PartnerFieldError('partner_required_field', field, column, `The field '${field}' (ERP column ${column}) is required.`);
@@ -158,7 +165,11 @@ export function validatePartnerRequest(request: PartnerWriteRequest): { document
   }
 
   positiveInt(request.sellerCode, 'sellerCode');
-  positiveInt(request.priceTableCode, 'priceTableCode');
+  // Owner 2026-11-27: a customer is never created without a price table (TGFPAR.CODTAB null zeroed order 2513).
+  if (request.priceTableCode === null) {
+    throw new PartnerFieldError('partner_required_field', 'priceTableCode', 'CODTAB', "The field 'priceTableCode' (ERP column CODTAB) is required.");
+  }
+  priceTableCodeValue(request.priceTableCode, 'priceTableCode');
   checkLength(request.phone, 'phone', 'TELEFONE');
   checkLength(request.email, 'email', 'EMAIL');
   checkLength(request.notes, 'notes', 'OBSERVACOES');
@@ -287,6 +298,13 @@ export function buildPartnerEditRequestText(request: PartnerEditRequest): string
   text('phone', 'TELEFONE');
   text('email', 'EMAIL');
   text('notes', 'OBSERVACOES');
+  // Owner 2026-11-27: the price table may be changed (never cleared). Sent only when present in the request.
+  const table = request.changes['priceTableCode'];
+  if (table !== undefined) {
+    if (typeof table !== 'number') throw new PartnerFieldError('partner_invalid_field', 'priceTableCode', 'CODTAB', "The field 'priceTableCode' must be a number.");
+    priceTableCodeValue(table, 'priceTableCode');
+    fields['CODTAB'] = value(table);
+  }
   for (const unsupported of ['contacts', 'addresses'] as const) {
     if (request.changes[unsupported] !== undefined) {
       throw new PartnerFieldError(

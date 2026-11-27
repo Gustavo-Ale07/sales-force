@@ -222,15 +222,18 @@ describe('readSellerGoals (TGFMET)', () => {
       { CODVEND: 7, DTREF: '2026-11-01', PREVREC: 500, QTDPREV: 5.5 },
       { CODVEND: 7, DTREF: '2026-12-01', PREVREC: 0, QTDPREV: 20 },
       { CODVEND: 3, DTREF: '2026-11-01', PREVREC: 2000, QTDPREV: 0 },
+      { CODVEND: 3, DTREF: '2026-11-01', CODPROD: 55, PREVREC: 300, QTDPREV: 3 },
+      { CODVEND: 3, DTREF: '2026-11-01', CODPROD: 56, PREVREC: 200, QTDPREV: 2 },
     ],
   };
 
-  it('ignores CODVEND = 0 rows and sums the goals of one seller and month, ordered by seller then month', async () => {
+  it('ignores CODVEND = 0 rows and aggregates general (no product) and product lines apart, ordered by seller, month and kind', async () => {
     const { gateway, mock } = gatewayOver(tables);
     expect(await rows(gateway.readSellerGoals())).toEqual([
-      { sellerCode: 3, month: '2026-11', revenueTarget: '2000', quantityTarget: '0' },
-      { sellerCode: 7, month: '2026-11', revenueTarget: '1500.5', quantityTarget: '15.5' },
-      { sellerCode: 7, month: '2026-12', revenueTarget: '0', quantityTarget: '20' },
+      { sellerCode: 3, month: '2026-11', revenueTarget: '2000', quantityTarget: '0', scope: 'general' },
+      { sellerCode: 3, month: '2026-11', revenueTarget: '500', quantityTarget: '5', scope: 'products' },
+      { sellerCode: 7, month: '2026-11', revenueTarget: '1500.5', quantityTarget: '15.5', scope: 'general' },
+      { sellerCode: 7, month: '2026-12', revenueTarget: '0', quantityTarget: '20', scope: 'general' },
     ]);
     const sql = mock.queries().map((q) => q.sql ?? '').join('\n');
     expect(sql).toContain('FROM TGFMET');
@@ -240,6 +243,51 @@ describe('readSellerGoals (TGFMET)', () => {
   it('a table with only seller-less rows reads empty', async () => {
     const { gateway } = gatewayOver({ TGFMET: [{ CODVEND: 0, DTREF: '2026-11-01', PREVREC: 0, QTDPREV: 110 }] });
     expect(await rows(gateway.readSellerGoals())).toEqual([]);
+  });
+});
+
+describe('readPositivationOrders (mobility orders with a billed child note)', () => {
+  const order = (nunota: number, over: Record<string, unknown> = {}) => ({ NUNOTA: nunota, CODPARC: 100, CODVEND: 7, CODTIPOPER: 1001, TIPMOV: 'P', DTNEG: '2026-11-02', DTFATUR: null, ...over });
+  const child = (nunota: number, over: Record<string, unknown> = {}) => ({ NUNOTA: nunota, CODPARC: 100, CODVEND: 7, CODTIPOPER: 1101, TIPMOV: 'V', STATUSNOTA: 'L', CANCELADO: 'N', DTNEG: '2026-11-05', DTFATUR: '2026-11-05', ...over });
+  const tables: ErpTables = {
+    TGFTOP: [
+      { CODTIPOPER: 1001, AD_MOBILIDADE: 'S' },
+      { CODTIPOPER: 1001, AD_MOBILIDADE: 'S' },
+      { CODTIPOPER: 1500, AD_MOBILIDADE: 'N' },
+    ],
+    TGFCAB: [
+      order(1), child(11), // billed in November
+      order(2), // order without a child note
+      order(3), child(13, { CANCELADO: 'S' }), // child cancelled
+      order(4, { CODTIPOPER: 1500 }), child(14), // not a mobility TOP
+      order(5, { CODPARC: 200 }), child(15, { CODPARC: 200, DTFATUR: '2026-10-30' }), child(25, { CODPARC: 200, DTFATUR: '2026-11-03' }), // two children, two months
+      order(6), child(16, { TIPMOV: 'D' }), // a return child
+      order(7, { CODVEND: null }), child(17, { DTFATUR: null, DTNEG: '2026-11-09' }), // no billing date: DTNEG
+    ],
+    TGFVAR: [11, 13, 14, 15, 25, 16, 17].flatMap((nunota) => {
+      const origin = nunota > 20 ? nunota - 20 : nunota - 10;
+      return [{ NUNOTA: nunota, NUNOTAORIG: origin }, { NUNOTA: nunota, NUNOTAORIG: origin }]; // one row per item, the read removes the duplicates
+    }),
+  };
+
+  it('keeps only billed, non-cancelled sale children of mobility orders, one row per order and month', async () => {
+    const { gateway, mock } = gatewayOver(tables);
+    expect(await rows(gateway.readPositivationOrders())).toEqual([
+      { customerCode: 100, sellerCode: 0, month: '2026-11', orderNumber: 7 },
+      { customerCode: 100, sellerCode: 7, month: '2026-11', orderNumber: 1 },
+      { customerCode: 200, sellerCode: 7, month: '2026-10', orderNumber: 5 },
+      { customerCode: 200, sellerCode: 7, month: '2026-11', orderNumber: 5 },
+    ].sort((a, b) => a.customerCode - b.customerCode || a.orderNumber - b.orderNumber || a.month.localeCompare(b.month)));
+    const sql = mock.queries().map((q) => q.sql ?? '').join('\n');
+    expect(sql).toContain('TGFVAR V');
+    expect(sql).toContain("AD_MOBILIDADE = 'S'");
+    expect(sql).toContain("F.TIPMOV IN ('V', 'L')");
+    expect(sql).toContain("NVL(F.CANCELADO, 'N') <> 'S'");
+  });
+
+  it('a month without a billed note reads empty (zero positivation, never an error)', async () => {
+    const { gateway } = gatewayOver({ TGFTOP: [], TGFCAB: [], TGFVAR: [] });
+    expect(await rows(gateway.readPositivationOrders())).toEqual([]);
   });
 });
 

@@ -193,6 +193,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/force-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Force configuration: days without sync and default price table (admin and manager) */
+        get: operations["getForceSettings"];
+        /**
+         * Replace the Force configuration (admin and manager, audited)
+         * @description The default price table must exist in the ERP price-table mirror (400 otherwise).
+         */
+        put: operations["updateForceSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/seller-discount-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Per-seller discount rules, optionally of one seller (admin and manager) */
+        get: operations["listSellerDiscountRules"];
+        put?: never;
+        /**
+         * Create a per-seller discount rule (admin and manager, audited)
+         * @description 409 when the same (seller, target kind, target) already has a rule; 400 for an unknown seller or an invalid target.
+         */
+        post: operations["createSellerDiscountRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/seller-discount-rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change the percent of a per-seller discount rule (admin and manager, audited) */
+        put: operations["updateSellerDiscountRule"];
+        post?: never;
+        /** Delete a per-seller discount rule (admin and manager, audited) */
+        delete: operations["deleteSellerDiscountRule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/me": {
         parameters: {
             query?: never;
@@ -652,6 +712,23 @@ export interface paths {
         };
         /** ERP cities (code, name, UF, IBGE) for the customer registration, ordered by UF and name */
         get: operations["listCities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/customer-price-tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Active price tables with mobility (code, name) for the customer registration, ordered by name */
+        get: operations["listCustomerPriceTables"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1712,6 +1789,7 @@ export interface components {
             email: string | null;
             /** @default null */
             notes: string | null;
+            priceTableCode?: number;
             /** @default [] */
             addresses: components["schemas"]["CustomerAddressInput"][];
             sellerCode?: number;
@@ -1746,6 +1824,12 @@ export interface components {
             expectedDataset: components["schemas"]["DatasetIdentity"];
             name: string;
             items: components["schemas"]["OrderTemplateItem"][];
+        };
+        CreateSellerDiscountRuleRequest: {
+            sellerCode: number;
+            targetKind: components["schemas"]["DiscountRuleTargetKind"];
+            targetCode: number | null;
+            maxPercent: string;
         };
         CreateTaskRequest: {
             /** Format: uuid */
@@ -1859,6 +1943,14 @@ export interface components {
             mostUsedNegotiationOrderCount: number;
             lastFreightType: components["schemas"]["FreightType"] | null;
         };
+        CustomerPriceTable: {
+            code: number;
+            name: string;
+        };
+        CustomerPriceTablesResponse: {
+            items: components["schemas"]["CustomerPriceTable"][];
+            defaultCode: number | null;
+        };
         /** @enum {string} */
         CustomerReasonCode: "document_already_registered" | "required_field" | "erp_refused" | "invalid_command" | "review_needed";
         /** @enum {string} */
@@ -1965,6 +2057,8 @@ export interface components {
             revision: string;
             updatedAt: components["schemas"]["IsoTimestamp"];
         };
+        /** @enum {string} */
+        DiscountRuleTargetKind: "product" | "subgroup" | "group" | "none";
         DuplicateAsOrderRequest: {
             /** Format: uuid */
             clientRequestId: string;
@@ -1997,6 +2091,11 @@ export interface components {
         };
         /** @enum {string} */
         FieldSupport: "SUPPORTED" | "READ_ONLY" | "IGNORED_UNTIL_NEEDED";
+        ForceSettings: {
+            maxDaysWithoutSync: number;
+            defaultPriceTableCode: number;
+            updatedAt: components["schemas"]["IsoTimestamp"];
+        };
         /** @enum {string} */
         FreightType: "CIF" | "FOB" | "SEM_FRETE";
         /** @enum {string} */
@@ -2829,11 +2928,25 @@ export interface components {
             active: boolean;
         };
         /** @enum {string} */
-        SellerDiscountKind: "general" | "group" | "product";
+        SellerDiscountKind: "general" | "group" | "subgroup" | "product";
         SellerDiscountRule: {
             kind: components["schemas"]["SellerDiscountKind"];
             code: number | null;
             percent: string;
+        };
+        SellerDiscountRuleRecord: {
+            /** Format: uuid */
+            id: string;
+            sellerCode: number;
+            sellerName: string | null;
+            targetKind: components["schemas"]["DiscountRuleTargetKind"];
+            targetCode: number | null;
+            targetName: string | null;
+            maxPercent: string;
+            updatedAt: components["schemas"]["IsoTimestamp"];
+        };
+        SellerDiscountRulesResponse: {
+            items: components["schemas"]["SellerDiscountRuleRecord"][];
         };
         SellerGoalRow: {
             sellerCode: number;
@@ -2985,6 +3098,7 @@ export interface components {
             phone?: string | null;
             email?: string | null;
             notes?: string | null;
+            priceTableCode?: number;
             contacts?: components["schemas"]["CustomerContactInput"][];
             addresses?: components["schemas"]["CustomerAddressInput"][];
         };
@@ -3005,6 +3119,13 @@ export interface components {
         UpdateDiscountLimitsRequest: {
             expectedRevision: string;
             limits: components["schemas"]["DiscountLimits"];
+        };
+        UpdateForceSettingsRequest: {
+            maxDaysWithoutSync: number;
+            defaultPriceTableCode: number;
+        };
+        UpdateSellerDiscountRuleRequest: {
+            maxPercent: string;
         };
         UseOrderTemplateRequest: {
             /** Format: uuid */
@@ -3558,6 +3679,322 @@ export interface operations {
             };
             /** @description Conflito de estado */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getForceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Configuração do Force */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForceSettings"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    updateForceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateForceSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Configuração salva */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForceSettings"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    listSellerDiscountRules: {
+        parameters: {
+            query?: {
+                sellerCode?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Regras de desconto por representante */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellerDiscountRulesResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    createSellerDiscountRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSellerDiscountRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description Regra criada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellerDiscountRuleRecord"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    updateSellerDiscountRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSellerDiscountRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description Regra atualizada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SellerDiscountRuleRecord"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    deleteSellerDiscountRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Regra excluída */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5011,6 +5448,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CitiesResponse"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    listCustomerPriceTables: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tabelas de preço do cadastro de cliente */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerPriceTablesResponse"];
                 };
             };
             /** @description Não autenticado */

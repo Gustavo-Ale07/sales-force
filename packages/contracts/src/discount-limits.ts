@@ -34,12 +34,12 @@ export const UpdateDiscountLimitsRequestSchema = named(
 );
 export type UpdateDiscountLimitsRequest = z.infer<typeof UpdateDiscountLimitsRequestSchema>;
 
-/* ---------- per-seller limits registered inside the ERP and mirrored read-only: general, group (any depth), product ---------- */
+/* ---------- per-seller limits kept in the Force database: general, group, subgroup (any depth), product ---------- */
 
 /** An ERP percentage: 0 to 100, up to four decimals. */
 const ErpPercentSchema = z.string().regex(/^(100(\.0+)?|\d{1,2}(\.\d{1,4})?)$/);
 
-export const SellerDiscountKindSchema = named('SellerDiscountKind', z.enum(['general', 'group', 'product']));
+export const SellerDiscountKindSchema = named('SellerDiscountKind', z.enum(['general', 'group', 'subgroup', 'product']));
 export type SellerDiscountKind = z.infer<typeof SellerDiscountKindSchema>;
 
 /** A rule as the client resolves it: `code` is the group or product code, `null` for the general rule. */

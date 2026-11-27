@@ -40,7 +40,7 @@ describe("edit body", () => {
 });
 
 describe("create request", () => {
-  const base = { ...emptyCreateForm(), document: CNPJ, name: " Padaria ", stateRegistration: "123", cityCode: 3550308, cityLabel: "São Paulo - SP" };
+  const base = { ...emptyCreateForm(), document: CNPJ, name: " Padaria ", stateRegistration: "123", cityCode: 3550308, cityLabel: "São Paulo - SP", priceTableCode: 5 };
 
   it("is strict: normalized document, trimmed text, one address with the city", () => {
     expect(hasCreateProblems(createProblems(base))).toBe(false);
@@ -53,10 +53,24 @@ describe("create request", () => {
       phone: "1133332222",
       email: null,
       notes: null,
+      priceTableCode: 5,
       addresses: [
         { cityCode: 3550308, streetCode: 0, streetName: "Rua A", neighborhoodCode: 0, neighborhoodName: "Centro", number: "10", complement: null, postalCode: "01310100" },
       ],
     });
+  });
+
+  it("the price table is mandatory on screen 3", () => {
+    expect(commercialProblems({ ...base, priceTableCode: null }).priceTableCode).toBe("Escolha a tabela de preço.");
+    expect(commercialProblems(base).priceTableCode).toBeNull();
+  });
+
+  it("editing sends the price table only when it changed", () => {
+    const same = emptyEditForm(5);
+    expect(buildUpdateBody(ID, { ...same, phone: "11999990000" })).not.toHaveProperty("priceTableCode");
+    expect(editProblems(same).empty).not.toBeNull();
+    expect(buildUpdateBody(ID, { ...same, priceTableCode: 8 }).priceTableCode).toBe(8);
+    expect(editProblems({ ...same, priceTableCode: 8 }).empty).toBeNull();
   });
 
   it("a picked suggestion goes by code, free text by name, never both", () => {

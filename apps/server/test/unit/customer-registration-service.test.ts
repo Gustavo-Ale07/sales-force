@@ -47,6 +47,13 @@ class FakeRepo {
   activeSellerExists(code: number): Promise<boolean> {
     return Promise.resolve(this.sellers.has(code));
   }
+  priceTables = new Set<number>([5, 9]);
+  activePriceTableExists(code: number): Promise<boolean> {
+    return Promise.resolve(this.priceTables.has(code));
+  }
+  defaultPriceTableCode(): Promise<number> {
+    return Promise.resolve(5);
+  }
   cities = new Set<number>([10]);
   neighborhoods = [{ code: 3, name: 'Centro' }];
   streets = [{ code: 7, name: 'DAS FLORES', kind: 'RUA' }];
@@ -135,6 +142,24 @@ function build(options: { enabled?: boolean; timeoutMs?: number; scope?: unknown
   );
   return { service, repo, audits };
 }
+
+describe('CustomerRegistrationService.create: price table (P-08)', () => {
+  it('stores the chosen table in the command; absent, the installation default; unknown, refused with nothing stored', async () => {
+    const chosen = build();
+    await chosen.service.create(user(), request({ priceTableCode: 9 }));
+    expect(chosen.repo.outbox[0]?.payload['priceTableCode']).toBe(9);
+    const fallback = build();
+    await fallback.service.create(user(), request());
+    expect(fallback.repo.outbox[0]?.payload['priceTableCode']).toBe(5);
+    const unknown = build();
+    await expect(unknown.service.create(user(), request({ priceTableCode: 77 }))).rejects.toMatchObject({
+      code: 'customer_refused',
+      details: { fields: { priceTableCode: expect.any(String) } },
+    });
+    expect(unknown.repo.rows).toHaveLength(0);
+    expect(unknown.repo.outbox).toHaveLength(0);
+  });
+});
 
 describe('CustomerRegistrationService.create: address (P-08)', () => {
   it('refuses an unknown city with a field message and stores nothing', async () => {

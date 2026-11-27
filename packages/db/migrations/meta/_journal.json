@@ -428,6 +428,27 @@
       "when": 1795704260160,
       "tag": "0060_erp_force_config",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1795704280160,
+      "tag": "0061_erp_seller_goal_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1795704290160,
+      "tag": "0062_erp_positivation_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1795779376163,
+      "tag": "0063_force_config_and_seller_discount_rule",
+      "breakpoints": true
     }
   ]
 }

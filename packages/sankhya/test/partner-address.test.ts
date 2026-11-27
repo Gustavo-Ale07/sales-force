@@ -14,7 +14,7 @@ function request(address: Partial<PartnerWriteRequest['addresses'][number]> | nu
     icmsClassification: 'R',
     stateRegistration: 'ISENTO',
     sellerCode: 7,
-    priceTableCode: null,
+    priceTableCode: 5,
     phone: '11999998888',
     email: 'a@b.com',
     notes: null,

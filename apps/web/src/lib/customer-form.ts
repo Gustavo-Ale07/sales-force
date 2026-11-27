@@ -56,6 +56,9 @@ export function notesProblem(value: string): string | null {
 /* ---------- Edit ---------- */
 
 export interface EditForm {
+  /** The table chosen in the form; starts as the customer's current one. Sent only when it differs from `currentPriceTableCode`. */
+  priceTableCode: number | null;
+  currentPriceTableCode: number | null;
   phone: string;
   email: string;
   notes: string;
@@ -69,10 +72,18 @@ export interface EditProblems {
   empty: string | null;
 }
 
-export const emptyEditForm = (): EditForm => ({ phone: "", email: "", notes: "" });
+export const emptyEditForm = (currentPriceTableCode: number | null = null): EditForm => ({
+  phone: "",
+  email: "",
+  notes: "",
+  priceTableCode: currentPriceTableCode,
+  currentPriceTableCode,
+});
+
+const priceTableChanged = (form: EditForm): boolean => form.priceTableCode !== null && form.priceTableCode !== form.currentPriceTableCode;
 
 export function editProblems(form: EditForm): EditProblems {
-  const touched = form.phone.trim() !== "" || form.email.trim() !== "" || form.notes.trim() !== "";
+  const touched = form.phone.trim() !== "" || form.email.trim() !== "" || form.notes.trim() !== "" || priceTableChanged(form);
   return {
     phone: phoneProblem(form.phone),
     email: emailProblem(form.email),
@@ -95,6 +106,7 @@ export function buildUpdateBody(clientRequestId: string, form: EditForm): Update
     ...(form.phone.trim() === "" ? {} : { phone: digitsOf(form.phone) }),
     ...(form.email.trim() === "" ? {} : { email: form.email.trim() }),
     ...(form.notes.trim() === "" ? {} : { notes: form.notes.trim() }),
+    ...(priceTableChanged(form) && form.priceTableCode !== null ? { priceTableCode: form.priceTableCode } : {}),
   };
 }
 
@@ -127,6 +139,8 @@ export interface CreateForm {
   streetCode: number | null;
   number: string;
   complement: string;
+  /** ERP price table code (CODTAB); null = not chosen (mandatory). Starts as the installation default. */
+  priceTableCode: number | null;
 }
 
 export const emptyCreateForm = (): CreateForm => ({
@@ -149,6 +163,7 @@ export const emptyCreateForm = (): CreateForm => ({
   streetCode: null,
   number: "",
   complement: "",
+  priceTableCode: null,
 });
 
 export interface CreateProblems {
@@ -162,6 +177,7 @@ export interface CreateProblems {
   number: string | null;
   complement: string | null;
   sellerCode: string | null;
+  priceTableCode: string | null;
   phone: string | null;
   email: string | null;
   notes: string | null;
@@ -171,7 +187,7 @@ export interface CreateProblems {
 export const CREATE_STEP_FIELDS: readonly (readonly (keyof CreateProblems)[])[] = [
   ["document", "name", "tradeName", "stateRegistration"],
   ["cityCode", "neighborhood", "street", "number", "complement", "phone", "email", "notes"],
-  ["sellerCode"],
+  ["priceTableCode", "sellerCode"],
 ];
 
 /** Form field (a key of `CreateProblems`) -> index of the screen that shows it. */
@@ -209,6 +225,7 @@ export function createProblems(form: CreateForm, sellerRequired = false): Create
     number: tooLong(form.number, LIMITS.addressNumber, "O número"),
     complement: tooLong(form.complement, LIMITS.addressComplement, "O complemento"),
     sellerCode: sellerRequired && form.sellerCode === "" ? "Escolha o vendedor." : null,
+    priceTableCode: form.priceTableCode === null ? "Escolha a tabela de preço." : null,
     phone: phoneProblem(form.phone),
     email: emailProblem(form.email),
     notes: notesProblem(form.notes),
@@ -262,6 +279,7 @@ export function buildCreateBody(clientRequestId: string, form: CreateForm): Crea
   return {
     clientRequestId,
     ...(form.sellerCode === "" ? {} : { sellerCode: Number(form.sellerCode) }),
+    ...(form.priceTableCode === null ? {} : { priceTableCode: form.priceTableCode }),
     document: normalizeTaxDocument(form.document),
     name: form.name.trim(),
     tradeName: tradeName === "" ? null : tradeName,
@@ -287,6 +305,7 @@ const FIELD_LABELS: Record<string, string> = {
   addresses: "Endereços",
   stateRegistration: "Inscrição estadual",
   sellerCode: "Vendedor",
+  priceTableCode: "Tabela de preço",
 };
 
 const REASON_TEXT: Record<string, string> = {

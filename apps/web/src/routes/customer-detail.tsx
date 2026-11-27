@@ -164,7 +164,7 @@ export function CustomerDetailPage({ code }: { code: number }) {
         }
       />
       <RepeatLastOrderNotice mutation={repeatLast} />
-      {canEdit ? <CustomerEditDialog customerCode={customer.code} open={editing} onOpenChange={setEditing} /> : null}
+      {canEdit ? <CustomerEditDialog customerCode={customer.code} currentPriceTableCode={customer.priceTableCode ?? null} open={editing} onOpenChange={setEditing} /> : null}
       <CustomerFichaTabs customerCode={customer.code} />
       <OrderTemplatesCard customerCode={customer.code} />
     </>

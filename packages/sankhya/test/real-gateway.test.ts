@@ -129,6 +129,7 @@ describe('capabilities and NotImplemented paths', () => {
       forceConfig: 'supported',
       forceDiscountLimits: 'supported',
       sellerGoals: 'supported',
+      positivationOrders: 'supported',
       ipiRates: 'supported',
       openTitles: 'supported',
       salesHistoryMonthly: 'supported',

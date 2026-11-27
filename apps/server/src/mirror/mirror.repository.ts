@@ -14,12 +14,10 @@ import {
   erpIpiRate,
   erpOpenTitle,
   erpProductGroup,
-  erpForceConfig,
-  erpForceDiscountLimit,
   type Database,
 } from '@salesforce/db';
 import { subtreeOf, visibleGroups, type GroupNode, type GroupRow } from './product-groups.js';
-import type { ForceConfig, ForceDiscountLimit, CustomerScope, IpiRate, OpenTitle, PriceTableVersion } from '@salesforce/domain';
+import type { CustomerScope, IpiRate, OpenTitle, PriceTableVersion } from '@salesforce/domain';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, not, or, sql, type SQL } from 'drizzle-orm';
 import { DATABASE } from '../platform/tokens.js';
 import { containsText, digitsOf, eqInt, fitsPgInt, inSellerCodes, offsetOf } from '../platform/sql.js';
@@ -450,6 +448,29 @@ export class MirrorRepository {
     return row?.name ?? null;
   }
 
+  /**
+   * Price tables a customer may be assigned to: active, not deleted, named. The mirror already holds only tables with mobility
+   * (AD_MOBILIDADE = 'S'; see `deriveReadScope`), so this is the mirror's active list ordered by name.
+   */
+  async listCustomerPriceTables(): Promise<{ code: number; name: string }[]> {
+    const rows = await this.db
+      .select({ code: erpPriceTable.code, name: erpPriceTable.name })
+      .from(erpPriceTable)
+      .where(and(eq(erpPriceTable.active, true), isNull(erpPriceTable.deletedAt), isNotNull(erpPriceTable.name)))
+      .orderBy(asc(erpPriceTable.name), asc(erpPriceTable.code));
+    return rows.map((row) => ({ code: row.code, name: row.name ?? '' }));
+  }
+
+  /** True when the code is an active, mirrored price table a customer may use. */
+  async isCustomerPriceTable(code: number): Promise<boolean> {
+    if (!fitsPgInt(code)) return false;
+    const [row] = await this.db
+      .select({ code: erpPriceTable.code })
+      .from(erpPriceTable)
+      .where(and(eq(erpPriceTable.code, code), eq(erpPriceTable.active, true), isNull(erpPriceTable.deletedAt)));
+    return row !== undefined;
+  }
+
   /** Stored versions of a table (superseded ones included; the domain picks the effective one). */
   async priceTableVersions(tableCode: number): Promise<PriceTableVersion[]> {
     if (!fitsPgInt(tableCode)) return [];
@@ -678,38 +699,6 @@ export class MirrorRepository {
       .where(and(isNull(erpProduct.deletedAt), inArray(erpProduct.code, usable)));
   }
 
-  /** AD_FORCECFG mirror (live rows). The caller resolves defaults with resolveForceConfig. */
-  async forceConfigRows(): Promise<ForceConfig[]> {
-    const rows = await this.db
-      .select({ id: erpForceConfig.id, daysWithoutSync: erpForceConfig.daysWithoutSync, defaultPriceTableCode: erpForceConfig.defaultPriceTableCode })
-      .from(erpForceConfig)
-      .where(isNull(erpForceConfig.deletedAt))
-      .orderBy(asc(erpForceConfig.id));
-    return rows.map((r) => ({ id: r.id, daysWithoutSync: r.daysWithoutSync ?? null, defaultPriceTableCode: r.defaultPriceTableCode ?? null }));
-  }
-
-  /** ONE seller's ERP discount facts: TGFVEN.DESCMAX plus the AD_FORCELIMDESC rows of that seller only (scope is the query). */
-  async sellerDiscountSource(sellerCode: number): Promise<{ generalPercent: string | null; rows: ForceDiscountLimit[] }> {
-    if (!fitsPgInt(sellerCode)) return { generalPercent: null, rows: [] };
-    const [seller] = await this.db
-      .select({ percent: erpSeller.maxDiscountPercent })
-      .from(erpSeller)
-      .where(and(eq(erpSeller.code, sellerCode), isNull(erpSeller.deletedAt)))
-      .limit(1);
-    const rows = await this.db
-      .select({
-        configId: erpForceDiscountLimit.configId,
-        seq: erpForceDiscountLimit.seq,
-        sellerCode: erpForceDiscountLimit.sellerCode,
-        groupCode: erpForceDiscountLimit.groupCode,
-        productCode: erpForceDiscountLimit.productCode,
-        percent: erpForceDiscountLimit.percent,
-      })
-      .from(erpForceDiscountLimit)
-      .where(and(eq(erpForceDiscountLimit.sellerCode, sellerCode), isNull(erpForceDiscountLimit.deletedAt)))
-      .orderBy(asc(erpForceDiscountLimit.configId), asc(erpForceDiscountLimit.seq));
-    return { generalPercent: seller?.percent ?? null, rows };
-  }
 
   /** Parent of every live product group (TGFGRU hierarchy, `null` at the top): the input of the discount-limit resolver. */
   async groupParentMap(): Promise<Map<number, number | null>> {

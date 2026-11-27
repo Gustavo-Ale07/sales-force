@@ -11,6 +11,7 @@ import { OrdersModule } from '../orders/orders.module.js';
 import { ImportsModule } from '../imports/imports.module.js';
 import { SellersModule } from '../sellers/sellers.module.js';
 import { SellerDiscountLimitsModule } from '../seller-discount-limits/seller-discount-limits.module.js';
+import { ForceConfigModule } from '../force-config/force-config.module.js';
 import { TemplatesModule } from '../templates/templates.module.js';
 import { TasksModule } from '../tasks/tasks.module.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
@@ -37,6 +38,7 @@ export class ApiModule {
         CustomersModule,
         SalesHistoryModule,
         CatalogModule,
+        ForceConfigModule,
         SellerDiscountLimitsModule,
         OrdersModule,
         TemplatesModule,

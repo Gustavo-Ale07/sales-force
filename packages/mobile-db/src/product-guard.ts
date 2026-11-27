@@ -2,7 +2,7 @@ import { getDraftItems, type ProductBlockReason } from "./local-orders";
 import { META_KEYS, cachedPriceTableCodes, customerPriceTableOf, getMeta } from "./reference-cache";
 import type { SqlExecutor, SqlRow } from "./connection";
 
-/** A customer without a table is priced in the table registered in the ERP (AD_FORCECFG, delivered with the device status); 5 until it is heard (owner 2026-11-13). */
+/** A customer without a table is priced in the table set in the Force configuration (delivered with the device status); 5 until it is heard (owner 2026-11-13). */
 const FALLBACK_PRICE_TABLE = 5;
 
 async function defaultPriceTableOf(db: SqlExecutor): Promise<number> {

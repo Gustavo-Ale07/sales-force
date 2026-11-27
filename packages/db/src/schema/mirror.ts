@@ -212,13 +212,34 @@ export const erpSellerGoal = pgTable(
     month: date('month', { mode: 'string' }).notNull(),
     revenueTarget: numeric('revenue_target', { precision: 14, scale: 2 }).notNull(),
     quantityTarget: numeric('quantity_target', { precision: 18, scale: 6 }).notNull(),
+    // `general` = the line without a product, `products` = the sum of the per-product lines; the domain picks one, never both (RF-GOL-1).
+    goalScope: text('goal_scope').notNull().default('products'),
     syncedAt: timestamp('synced_at', { withTimezone: true }).notNull(),
   },
   (t) => [
-    primaryKey({ name: 'erp_seller_goal_pk', columns: [t.sellerCode, t.month] }),
+    primaryKey({ name: 'erp_seller_goal_pk', columns: [t.sellerCode, t.month, t.goalScope] }),
+    check('erp_seller_goal_scope_chk', sql`${t.goalScope} in ('general', 'products')`),
     check('erp_seller_goal_values_chk', sql`${t.revenueTarget} >= 0 and ${t.quantityTarget} >= 0 and extract(day from ${t.month}) = 1`),
     // Serves: the month read of every goals request (month, then seller scope).
     index('erp_seller_goal_month_idx').on(t.month),
+  ],
+);
+
+// Read-only mirror of the billed mobility orders (goal positivation): one row per customer, order and billing month, replaced as a whole snapshot. No value, cost or margin (P-20).
+export const erpPositivationOrder = pgTable(
+  'erp_positivation_order',
+  {
+    customerCode: integer('customer_code').notNull(),
+    sellerCode: integer('seller_code').notNull(),
+    month: date('month', { mode: 'string' }).notNull(),
+    orderNumber: integer('order_number').notNull(),
+    syncedAt: timestamp('synced_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    primaryKey({ name: 'erp_positivation_order_pk', columns: [t.customerCode, t.orderNumber, t.month] }),
+    check('erp_positivation_order_month_chk', sql`extract(day from ${t.month}) = 1`),
+    // Serves: the month read of every goals request.
+    index('erp_positivation_order_month_idx').on(t.month),
   ],
 );
 

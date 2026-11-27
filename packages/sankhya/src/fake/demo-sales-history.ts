@@ -1,3 +1,4 @@
+import type { PositivationOrder } from '@salesforce/domain';
 import { canonicalDecimal } from '../decimal.js';
 import {
   validateSalesHistoryConfig,
@@ -178,4 +179,15 @@ export function demoSalesHistoryCustomerProduct(
       }),
     )
     .sort((a, b) => compareArrays([a.customerCode, a.productCode, a.topCode], [b.customerCode, b.productCode, b.topCode]));
+}
+
+/**
+ * Synthetic positivation orders (RF-GOL-2): each billed sale note of the demo stands for one billed mobility order of the same
+ * customer and seller, placed in the month of its billing date. Ordered by (customer, order, month) like the real read.
+ */
+export function demoPositivationOrders(notes: readonly DemoSalesNote[]): PositivationOrder[] {
+  return notes
+    .filter((n) => n.topCode === DEMO_SALE_TOP && n.status === 'L' && n.billingDate !== null)
+    .map((n): PositivationOrder => ({ customerCode: n.customerCode, sellerCode: n.sellerCode, month: (n.billingDate as string).slice(0, 7), orderNumber: n.noteId }))
+    .sort((a, b) => compareArrays([a.customerCode, a.orderNumber, monthKey(a.month)], [b.customerCode, b.orderNumber, monthKey(b.month)]));
 }

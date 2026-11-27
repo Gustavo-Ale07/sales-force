@@ -6,12 +6,13 @@ import {
   initialDeviceStatus,
   mayManageDevice,
   resolveForceConfig,
+  type ResolvedForceConfig,
   type AccountRole,
   type DeviceStatus,
 } from '@salesforce/domain';
 import { pushDevice } from '@salesforce/db';
 import { and, eq, isNull } from 'drizzle-orm';
-import { MirrorRepository } from '../mirror/mirror.repository.js';
+import { ForceConfigRepository } from '../force-config/force-config.repository.js';
 import { uuidv7 } from '../platform/ids.js';
 import { AppError } from '../http/app-error.js';
 import { CLOCK, type Clock } from '../platform/tokens.js';
@@ -40,7 +41,7 @@ export class DeviceService {
   constructor(
     @Inject(DeviceRepository) private readonly devices: DeviceRepository,
     @Inject(AuditService) private readonly audit: AuditService,
-    @Inject(MirrorRepository) private readonly mirror: MirrorRepository,
+    @Inject(ForceConfigRepository) private readonly forceConfig: ForceConfigRepository,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -95,7 +96,7 @@ export class DeviceService {
   }
 
   async sessionDevice(deviceId: string, status: DeviceStatus): Promise<SessionDevice> {
-    const config = resolveForceConfig(await this.mirror.forceConfigRows());
+    const config = await this.resolvedConfig();
     return { id: deviceId, status, offlineMaxDays: clampOfflineMaxDays(config.daysWithoutSync), defaultPriceTableCode: config.defaultPriceTableCode };
   }
 
@@ -121,9 +122,14 @@ export class DeviceService {
     return this.decide(actor, deviceId, 'revoked');
   }
 
-  /** Days without synchronizing: registered inside the ERP (AD_FORCECFG, read-only mirror); 7 when not filled in. */
+  private async resolvedConfig(): Promise<ResolvedForceConfig> {
+    const row = await this.forceConfig.settings();
+    return resolveForceConfig(row === null ? null : { maxDaysWithoutSync: row.maxDaysWithoutSync, defaultPriceTableCode: row.defaultPriceTableCode });
+  }
+
+  /** Days without synchronizing: the Force own configuration (edited on the site); 7 when the row is missing. */
   private async offlineMaxDays(): Promise<number> {
-    return clampOfflineMaxDays(resolveForceConfig(await this.mirror.forceConfigRows()).daysWithoutSync);
+    return clampOfflineMaxDays((await this.resolvedConfig()).daysWithoutSync);
   }
 
   async getSettings(): Promise<DeviceSettings> {

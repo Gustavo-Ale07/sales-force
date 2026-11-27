@@ -10,6 +10,7 @@ import type {
   ForceConfig,
   ForceDiscountLimit,
   SellerGoal,
+  PositivationOrder,
   IpiRate,
   IsoTimestamp,
   OpenTitle,
@@ -877,23 +878,70 @@ export const POSTAL_CODE_SPEC: EntitySpec<PostalCodeEntry> = {
 
 /**
  * TGFMET, the native goal screen (Sandbox 2026-11-26: 47 rows, all CODVEND = 0, so no seller goal yet; no PK constraint). Only rows of a
- * seller (CODVEND > 0) are read; DTREF is the month (always day 01 in the Sandbox). The goals of one seller and month are summed
- * (PREVREC value, QTDPREV quantity; both nullable FLOAT), so the key is (seller, month) whatever the dimension columns hold.
+ * seller (CODVEND > 0) are read; DTREF is the month (always day 01 in the Sandbox). Two aggregates per seller and month (PREVREC value,
+ * QTDPREV quantity; both nullable FLOAT): the general line (CODPROD null or 0, TIPO 'G') and the per-product lines (TIPO 'P'). The domain
+ * decides which one is the goal (general wins, never added to the products). Sandbox 2026-11-27: the 47 rows are all CODVEND = 0
+ * with a product, so no seller goal exists yet.
  */
 export const SELLER_GOAL_SPEC: EntitySpec<SellerGoal> = {
   entity: 'sellerGoals',
   table: 'TGFMET',
-  select: ['CODVEND', "TO_CHAR(TRUNC(DTREF, 'MM'), 'YYYY-MM') AS MES", 'NVL(SUM(PREVREC), 0) AS VLRMETA', 'NVL(SUM(QTDPREV), 0) AS QTDMETA'],
-  columns: ['CODVEND', 'MES', 'VLRMETA', 'QTDMETA'],
+  select: [
+    'CODVEND',
+    "TO_CHAR(TRUNC(DTREF, 'MM'), 'YYYY-MM') AS MES",
+    "CASE WHEN NVL(CODPROD, 0) = 0 THEN 'G' ELSE 'P' END AS TIPO",
+    'NVL(SUM(PREVREC), 0) AS VLRMETA',
+    'NVL(SUM(QTDPREV), 0) AS QTDMETA',
+  ],
+  columns: ['CODVEND', 'MES', 'TIPO', 'VLRMETA', 'QTDMETA'],
   where: 'CODVEND > 0',
-  groupBy: "CODVEND, TO_CHAR(TRUNC(DTREF, 'MM'), 'YYYY-MM')",
-  orderBy: 'CODVEND, MES',
+  groupBy: "CODVEND, TO_CHAR(TRUNC(DTREF, 'MM'), 'YYYY-MM'), CASE WHEN NVL(CODPROD, 0) = 0 THEN 'G' ELSE 'P' END",
+  orderBy: 'CODVEND, MES, TIPO',
   map: (row) => {
     const mes = row.text('MES');
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return row.reject('MES', 'is not a YYYY-MM month');
-    return { sellerCode: row.int('CODVEND'), month: mes, revenueTarget: row.decimal('VLRMETA'), quantityTarget: row.decimal('QTDMETA') };
+    const tipo = row.text('TIPO');
+    if (tipo !== 'G' && tipo !== 'P') return row.reject('TIPO', 'is not G or P');
+    return {
+      sellerCode: row.int('CODVEND'),
+      month: mes,
+      revenueTarget: row.decimal('VLRMETA'),
+      quantityTarget: row.decimal('QTDMETA'),
+      scope: tipo === 'G' ? 'general' : 'products',
+    };
   },
-  keyOf: (goal) => [goal.sellerCode, monthKey(goal.month)],
+  keyOf: (goal) => [goal.sellerCode, monthKey(goal.month), goal.scope === 'general' ? 0 : 1],
+};
+
+/**
+ * Positivation mirror (RF-GOL-2, owner ruling 2026-11-27): one row per mobility ORDER (a TGFCAB of TIPMOV 'P' whose TOP has
+ * TGFTOP.AD_MOBILIDADE = 'S') that has a billed child sale note (TGFVAR.NUNOTAORIG -> NUNOTA; child TIPMOV 'V' or 'L', not
+ * cancelled), placed in the month of the child's billing date (DTFATUR, DTNEG when empty) inside the last 12 months. Customer and
+ * seller are the ORDER's. Sandbox 2026-11-27: TGFCAB has CANCELADO CHAR, STATUSNOTA, TIPMOV, DTFATUR, DTNEG; TGFVAR has NUNOTA and
+ * NUNOTAORIG (112 order x child pairs for the four mobility TOPs, 4640 item rows, so the group by removes the duplicates); the order and
+ * its child always share CODPARC (4066 pairs, 0 differences). A month without a billed note yields no row (positivation 0, not "no data").
+ */
+export const POSITIVATION_ORDER_SPEC: EntitySpec<PositivationOrder> = {
+  entity: 'positivationOrders',
+  table: 'TGFCAB P INNER JOIN TGFVAR V ON V.NUNOTAORIG = P.NUNOTA INNER JOIN TGFCAB F ON F.NUNOTA = V.NUNOTA',
+  select: ['P.CODPARC AS CODPARC', 'NVL(P.CODVEND, 0) AS CODVEND', "TO_CHAR(NVL(F.DTFATUR, F.DTNEG), 'YYYY-MM') AS MES", 'P.NUNOTA AS NUNOTA'],
+  columns: ['CODPARC', 'CODVEND', 'MES', 'NUNOTA'],
+  where: [
+    'P.CODPARC > 0',
+    "P.TIPMOV = 'P'",
+    "P.CODTIPOPER IN (SELECT T.CODTIPOPER FROM TGFTOP T WHERE T.AD_MOBILIDADE = 'S')",
+    "F.TIPMOV IN ('V', 'L')",
+    "NVL(F.CANCELADO, 'N') <> 'S'",
+    "NVL(F.DTFATUR, F.DTNEG) >= TRUNC(ADD_MONTHS(SYSDATE, -11), 'MM')",
+  ].join(' AND '),
+  groupBy: "P.CODPARC, NVL(P.CODVEND, 0), TO_CHAR(NVL(F.DTFATUR, F.DTNEG), 'YYYY-MM'), P.NUNOTA",
+  orderBy: 'CODPARC, NUNOTA, MES',
+  map: (row) => {
+    const mes = row.text('MES');
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return row.reject('MES', 'is not a YYYY-MM month');
+    return { customerCode: row.int('CODPARC'), sellerCode: row.int('CODVEND'), month: mes, orderNumber: row.int('NUNOTA') };
+  },
+  keyOf: (order) => [order.customerCode, order.orderNumber, monthKey(order.month)],
 };
 
 /**

@@ -18,6 +18,7 @@ function fakeAddresses(overrides: Partial<AddressPort> = {}): AddressPort {
     searchNeighborhoods: async (query) => [{ code: 5, name: "Centro" }].filter((item) => fold(item.name).includes(fold(query))),
     searchStreets: async (query) => [{ code: 9, name: "Paulista", kind: "Avenida" }].filter((item) => fold(item.name).includes(fold(query))),
     lookupPostalCode: async () => null,
+    customerPriceTables: async () => ({ items: [{ code: 5, name: "Tabela Padrão" }, { code: 7, name: "Tabela Atacado" }], defaultCode: 5 }),
     ...overrides,
   };
 }
@@ -121,6 +122,7 @@ describe("CustomerCreateScreen", () => {
       email: null,
       notes: null,
       addresses: [{ cityCode: 3550308, streetCode: 9, streetName: null, neighborhoodCode: 0, neighborhoodName: "Vila Nova", number: "10", complement: null, postalCode: null }],
+      priceTableCode: 5,
     });
   });
 
@@ -161,6 +163,18 @@ describe("CustomerCreateScreen", () => {
     await fireEvent.press(await screen.findByLabelText("Cadastrar"));
     await waitFor(() => expect(onSave).toHaveBeenCalled());
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ icmsClassification: "C" }));
+  });
+
+  it("the price table starts as the installation default and the chosen one is sent", async () => {
+    const onSave = jest.fn(async () => undefined);
+    await setup(onSave);
+    await identifyPerson();
+    await chooseCity();
+    await fireEvent.press(screen.getByLabelText("Continuar"));
+    expect(await screen.findByLabelText("Tabela de preço Tabela Atacado")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Tabela de preço Tabela Atacado"));
+    await fireEvent.press(screen.getByLabelText("Cadastrar"));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ priceTableCode: 7 })));
   });
 
   it("a non-seller must pick the seller on screen 3, and it is sent", async () => {

@@ -3,7 +3,7 @@ import { listProductGroupTree, readSellerDiscountLimits, type SqlDatabase } from
 import type { ProductListItem } from "../data/ports";
 
 /**
- * The product's discount ceiling as the seller's own rules resolve it (product > nearest group > general > DESCMAX), with the SAME
+ * The product's discount ceiling as the seller's own rules resolve it (product > subgroup > group > general > DESCMAX), with the SAME
  * domain function the server uses. Without cached rules the product keeps its DESCMAX. Offline: reads only the local cache.
  */
 export async function sellerLimitApplier(db: SqlDatabase): Promise<(product: ProductListItem) => ProductListItem> {

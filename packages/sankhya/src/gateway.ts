@@ -20,6 +20,7 @@ import type {
   ForceConfig,
   ForceDiscountLimit,
   SellerGoal,
+  PositivationOrder,
   IpiRate,
   OpenTitle,
 } from '@salesforce/domain';
@@ -49,6 +50,7 @@ export type ReadEntity =
   | 'forceConfig'
   | 'forceDiscountLimits'
   | 'sellerGoals'
+  | 'positivationOrders'
   | 'ipiRates'
   | 'openTitles'
   | 'salesHistoryMonthly'
@@ -72,6 +74,7 @@ export const READ_ENTITIES: readonly ReadEntity[] = [
   'forceConfig',
   'forceDiscountLimits',
   'sellerGoals',
+  'positivationOrders',
   'ipiRates',
   'openTitles',
   'salesHistoryMonthly',
@@ -165,6 +168,8 @@ export interface SankhyaReadPort {
   readForceDiscountLimits(options?: ReadOptions): Snapshot<ForceDiscountLimit>;
   /** Ordered by seller then month. TGFMET seller goals (CODVEND > 0), one row per seller and month; read in full on every run. */
   readSellerGoals(options?: ReadOptions): Snapshot<SellerGoal>;
+  /** Ordered by `(customerCode, orderNumber, month)`. Mobility orders with a billed child sale note (RF-GOL-2 positivation), last 12 months; read in full on every run. */
+  readPositivationOrders(options?: ReadOptions): Snapshot<PositivationOrder>;
   /** Ordered by `Neighborhood.code`. */
   readNeighborhoods(options?: ReadOptions): Snapshot<Neighborhood>;
   /** Ordered by `Street.code`. */
@@ -177,6 +182,8 @@ export interface SankhyaReadPort {
   readForceDiscountLimits(options?: ReadOptions): Snapshot<ForceDiscountLimit>;
   /** Ordered by seller then month. TGFMET seller goals (CODVEND > 0), one row per seller and month; read in full on every run. */
   readSellerGoals(options?: ReadOptions): Snapshot<SellerGoal>;
+  /** Ordered by `(customerCode, orderNumber, month)`. Mobility orders with a billed child sale note (RF-GOL-2 positivation), last 12 months; read in full on every run. */
+  readPositivationOrders(options?: ReadOptions): Snapshot<PositivationOrder>;
   /** Ordered by `IpiRate.code`. IPI rates (TGFIPI) for the display estimate; read in full on every run. */
   readIpiRates(options?: ReadOptions): Snapshot<IpiRate>;
   /** Ordered by `OpenTitle.nufin`. Open receivable titles (read-only financial information, D-I); a complete snapshot every run. */

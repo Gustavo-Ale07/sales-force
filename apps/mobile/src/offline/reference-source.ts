@@ -295,6 +295,7 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
     fetchCities: () => guard(async () => (await callApi(() => api.GET("/cities"))).items),
     fetchNeighborhoods: () => guard(async () => (await callApi(() => api.GET("/neighborhoods"))).items),
     fetchStreets: () => guard(async () => (await callApi(() => api.GET("/streets"))).items),
+    fetchCustomerPriceTables: () => guard(() => callApi(() => api.GET("/customer-price-tables"))),
     fetchDatasetIdentity: () => guard(async () => datasetIdentityOf(await callApi(() => api.GET("/order-entry/configuration")))),
   };
 }

@@ -40,6 +40,8 @@ export interface CustomerUpsertPayload {
   readonly phone: string | null;
   readonly email: string | null;
   readonly notes: string | null;
+  /** TGFPAR.CODTAB: validated against the price-table mirror before the command is stored; never null (owner 2026-11-27). */
+  readonly priceTableCode: number;
   readonly addresses: ReadonlyArray<CustomerUpsertAddress>;
 }
 
@@ -68,7 +70,7 @@ export interface RegistrationActor {
  * A seller always owns what they create (their own linked code; with several links the request must name one of
  * them). A manager/admin names the seller, or uses their single linked code. Anything else is an issue, never a guess.
  */
-export function prepareCustomerRegistration(body: CreateCustomerRequest, actor: RegistrationActor): PrepareOutcome {
+export function prepareCustomerRegistration(body: CreateCustomerRequest, actor: RegistrationActor, defaultPriceTableCode: number): PrepareOutcome {
   const issues: AppErrorIssue[] = [];
   const document = normalizeTaxDocument(body.document);
   const kind = taxDocumentKind(document);
@@ -109,6 +111,8 @@ export function prepareCustomerRegistration(body: CreateCustomerRequest, actor: 
     phone: body.phone,
     email: body.email,
     notes: body.notes,
+    // A build that predates the field omits it: the installation default applies. The screens always send the chosen table.
+    priceTableCode: body.priceTableCode ?? defaultPriceTableCode,
     addresses: body.addresses.map((a) => ({
       cityCode: a.cityCode,
       streetCode: a.streetCode,

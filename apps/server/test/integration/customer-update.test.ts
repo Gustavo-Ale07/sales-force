@@ -1,4 +1,4 @@
-import { auditLog, integrationOutbox } from '@salesforce/db';
+import { auditLog, erpPriceTable, integrationOutbox } from '@salesforce/db';
 import { getDemoDataset } from '@salesforce/sankhya';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -71,6 +71,23 @@ describe('PATCH /customers/{code}', () => {
     const { status, body } = await patch(open, 'seller1', mine, { clientRequestId: '019a0000-0000-7000-8000-0000000000ab', email: 'novo@example.com' });
     expect(status).toBe(409);
     expect(body.details.reason).toBe('customer_update_in_progress');
+  });
+
+  it('refuses a price table that is not an active table of the mirror with 422 price_table_not_found (P-08)', async () => {
+    const { status, body } = await patch(open, 'seller1', mine, { clientRequestId: '019a0000-0000-7000-8000-0000000000ac', priceTableCode: 987654 });
+    expect(status).toBe(422);
+    expect(body.details.fields.priceTableCode).toBeTruthy();
+    expect(body.details.issues[0]).toMatchObject({ path: 'priceTableCode', code: 'price_table_not_found' });
+  });
+
+  it('accepts an active mirrored price table and records it in the command', async () => {
+    const db = open.database.handle.db;
+    const [table] = await db.select({ code: erpPriceTable.code }).from(erpPriceTable).where(eq(erpPriceTable.active, true)).limit(1);
+    if (table === undefined) throw new Error('fixture lacks an active price table');
+    const { status } = await patch(open, 'admin', foreign, { clientRequestId: '019a0000-0000-7000-8000-0000000000ad', priceTableCode: table.code });
+    expect(status).toBe(202);
+    const rows = await db.select().from(integrationOutbox).where(eq(integrationOutbox.originId, 'force-edit:019a0000-0000-7000-8000-0000000000ad'));
+    expect(rows[0]?.payload).toMatchObject({ customerCode: foreign, changes: { priceTableCode: table.code } });
   });
 
   it('is 404 for a customer outside the seller scope, whatever the body says', async () => {

@@ -16,6 +16,7 @@ export default defineConfig({
     './src/schema/cnpj-cache.ts',
     './src/schema/tasks.ts',
     './src/schema/notifications.ts',
+    './src/schema/force-config.ts',
   ],
   out: './migrations',
 });

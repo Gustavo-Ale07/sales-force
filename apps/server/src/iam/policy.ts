@@ -71,6 +71,13 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   getMyDiscountLimits: { roles: ['seller', 'manager', 'admin'] },
   getDiscountLimits: { roles: ['admin'] },
   updateDiscountLimits: { roles: ['admin'] },
+  // Owner ruling 2026-11-27: the Force own configuration (settings, per-seller discount rules) is edited on the site by the management profiles.
+  getForceSettings: { roles: ['admin', 'manager'] },
+  updateForceSettings: { roles: ['admin', 'manager'] },
+  listSellerDiscountRules: { roles: ['admin', 'manager'] },
+  createSellerDiscountRule: { roles: ['admin', 'manager'] },
+  updateSellerDiscountRule: { roles: ['admin', 'manager'] },
+  deleteSellerDiscountRule: { roles: ['admin', 'manager'] },
   // D-AR: creating a customer in the Force: seller, manager and admin (never `technical`). Which seller owns the
   // customer is decided per request (prepareCustomerRegistration), not by this table.
   createCustomer: { roles: EVERY_ROLE },
@@ -122,6 +129,7 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   listCarriers: { roles: EVERY_ROLE },
   listCities: { roles: EVERY_ROLE },
   listNeighborhoods: { roles: EVERY_ROLE },
+  listCustomerPriceTables: { roles: EVERY_ROLE },
   listStreets: { roles: EVERY_ROLE },
   lookupPostalCode: { roles: EVERY_ROLE },
   lookupCnpj: { roles: EVERY_ROLE },

@@ -55,6 +55,7 @@ function build() {
   const refusals: unknown[] = [];
   const budget = { used: 0 };
   const registrationRepository = {
+    defaultPriceTableCode: vi.fn(async () => 5),
     findDocumentHolder: vi.fn(async (document: string) => (holders.has(document) ? { code: 1 } : null)),
     countSince: vi.fn(async () => budget.used + refusals.length),
     recordRefusal: vi.fn(async (input: unknown) => {

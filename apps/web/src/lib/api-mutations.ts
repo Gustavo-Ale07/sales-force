@@ -64,6 +64,22 @@ export function updateDiscountLimits(api: ApiClient, body: UpdateDiscountLimitsB
   return callApi(() => api.PUT("/discount-limits", { body }));
 }
 
+export function updateForceSettings(api: ApiClient, body: ApiSchema<"UpdateForceSettingsRequest">) {
+  return callApi(() => api.PUT("/force-config", { body }));
+}
+
+export function createSellerDiscountRule(api: ApiClient, body: ApiSchema<"CreateSellerDiscountRuleRequest">) {
+  return callApi(() => api.POST("/seller-discount-rules", { body }));
+}
+
+export function updateSellerDiscountRule(api: ApiClient, id: string, maxPercent: string) {
+  return callApi(() => api.PUT("/seller-discount-rules/{id}", { params: { path: { id } }, body: { maxPercent } }));
+}
+
+export function deleteSellerDiscountRule(api: ApiClient, id: string) {
+  return callApi(() => api.DELETE("/seller-discount-rules/{id}", { params: { path: { id } } }));
+}
+
 /** W-20: decide a pending discount request. Online only; the server re-checks the level pool and the state. */
 export function approveApproval(api: ApiClient, id: string, comment: string | undefined) {
   return callApi(() => api.POST("/approvals/{id}/approve", { params: { path: { id } }, body: comment ? { comment } : {} }));

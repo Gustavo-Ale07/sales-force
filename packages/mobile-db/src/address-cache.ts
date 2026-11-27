@@ -1,5 +1,6 @@
 import type { SqlExecutor, SqlRow } from "./connection";
 import { escapeLike, normalizeSearchText } from "./offline-env";
+import { deleteMeta, getMeta, setMeta } from "./reference-cache";
 
 /**
  * Address lists of the new-customer form (owner 2026-11-26): ERP cities, neighborhoods and streets, read offline, plus the postal codes
@@ -38,6 +39,17 @@ export interface CachedPostalCode {
 }
 
 export const ADDRESS_SEARCH_LIMIT = 50;
+
+/** Price tables a customer may be given (TGFNTA with mobility, by name) and the installation default, as the last pull stored them. */
+export interface CachedCustomerPriceTable {
+  readonly code: number;
+  readonly name: string;
+}
+export interface CachedCustomerPriceTables {
+  readonly items: readonly CachedCustomerPriceTable[];
+  readonly defaultCode: number | null;
+}
+export const CUSTOMER_PRICE_TABLES_META_KEY = "cache.customerPriceTables";
 
 const rowsOf = (value: readonly unknown[]): readonly Record<string, unknown>[] => value.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null);
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
@@ -86,7 +98,37 @@ export async function replaceStreets(tx: SqlExecutor, items: readonly unknown[])
   return count;
 }
 
+/** Replaces the stored price tables of the customer form with the pull's answer (`{items, defaultCode}`); rows without code or name are skipped. */
+export async function replaceCustomerPriceTables(tx: SqlExecutor, answer: unknown, updatedAt: string): Promise<void> {
+  const source = typeof answer === "object" && answer !== null ? (answer as Record<string, unknown>) : {};
+  const items: CachedCustomerPriceTable[] = [];
+  for (const item of rowsOf(Array.isArray(source.items) ? source.items : [])) {
+    const code = codeOf(item.code);
+    const name = text(item.name).trim();
+    if (code !== null && name !== "") items.push({ code, name });
+  }
+  const value: CachedCustomerPriceTables = { items, defaultCode: codeOf(source.defaultCode) };
+  await setMeta(tx, CUSTOMER_PRICE_TABLES_META_KEY, JSON.stringify(value), updatedAt);
+}
+
+/** The stored tables, ordered by name; empty (and no default) when the device never received them. */
+export async function getCustomerPriceTables(db: SqlExecutor): Promise<CachedCustomerPriceTables> {
+  const raw = await getMeta(db, CUSTOMER_PRICE_TABLES_META_KEY);
+  if (raw === null) return { items: [], defaultCode: null };
+  try {
+    const parsed = JSON.parse(raw) as Partial<CachedCustomerPriceTables>;
+    const items = rowsOf(Array.isArray(parsed.items) ? parsed.items : [])
+      .map((item) => ({ code: codeOf(item.code), name: text(item.name) }))
+      .filter((item): item is CachedCustomerPriceTable => item.code !== null && item.name !== "")
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    return { items, defaultCode: codeOf(parsed.defaultCode) };
+  } catch {
+    return { items: [], defaultCode: null };
+  }
+}
+
 export async function clearAddressLists(tx: SqlExecutor): Promise<void> {
+  await deleteMeta(tx, CUSTOMER_PRICE_TABLES_META_KEY);
   await tx.execute("DELETE FROM cache_city");
   await tx.execute("DELETE FROM cache_neighborhood");
   await tx.execute("DELETE FROM cache_street");

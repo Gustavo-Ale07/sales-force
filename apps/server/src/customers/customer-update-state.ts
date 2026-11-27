@@ -70,6 +70,6 @@ export function updateRefusalFields(message: string): Record<string, string> {
   return { [hint?.[1] ?? '_']: message };
 }
 
-export const EDITABLE_CUSTOMER_FIELDS = ['phone', 'email', 'notes', 'contacts', 'addresses'] as const;
+export const EDITABLE_CUSTOMER_FIELDS = ['phone', 'email', 'notes', 'priceTableCode', 'contacts', 'addresses'] as const;
 /** The only fields the worker can deliver today: contacts and addresses have no validated ERP mapping (S5.2); notes (OBSERVACOES) is proven by roteiro T5. */
-export const DELIVERABLE_CUSTOMER_FIELDS = ['phone', 'email', 'notes'] as const;
+export const DELIVERABLE_CUSTOMER_FIELDS = ['phone', 'email', 'notes', 'priceTableCode'] as const;

@@ -1,6 +1,6 @@
 import { mediaSampleOffsets, mediaSampleWidth, toHex } from '../../src/media.js';
 import type { DemoDataset } from '../../src/fake/demo-data.js';
-import type { DemoSalesNote } from '../../src/fake/demo-sales-history.js';
+import { demoPositivationOrders, type DemoSalesNote } from '../../src/fake/demo-sales-history.js';
 import type { HttpRequest, HttpResponse, HttpTransport } from '../../src/real/transport.js';
 
 /**
@@ -138,7 +138,7 @@ export function erpTablesFromDataset(dataset: DemoDataset, dbUtcOffsetMinutes = 
     TSIBAI: dataset.neighborhoods.map((n) => ({ CODBAI: n.code, NOMEBAI: n.name })),
     TSIEND: dataset.streets.map((s) => ({ CODEND: s.code, NOMEEND: s.name, TIPO: s.kind })),
     TSICEP: dataset.postalCodes.map((p) => ({ CEP: String(p.cep).padStart(8, '0'), CODCID: p.cityCode, CODBAI: p.neighborhoodCode, CODEND: p.streetCode })),
-    TGFMET: dataset.sellerGoals.map((g) => ({ CODVEND: g.sellerCode, DTREF: `${g.month}-01`, PREVREC: Number(g.revenueTarget), QTDPREV: Number(g.quantityTarget) })),
+    TGFMET: dataset.sellerGoals.map((g) => ({ CODVEND: g.sellerCode, DTREF: `${g.month}-01`, CODPROD: g.scope === 'general' ? 0 : 1, PREVREC: Number(g.revenueTarget), QTDPREV: Number(g.quantityTarget) })),
     TGFGRU: dataset.productGroups.map((g) => ({
       CODGRUPOPROD: g.code,
       DESCRGRUPOPROD: g.name,
@@ -175,7 +175,25 @@ export function erpSalesTables(notes: readonly DemoSalesNote[]): ErpTables {
       DTNEG: n.negotiationDate,
       DTFATUR: n.billingDate,
       VLRNOTA: Number(n.amount),
-    })),
+      TIPMOV: 'V',
+      CANCELADO: 'N',
+    })).concat(
+      // Positivation: every billed sale note is the child of one mobility order (TOP 1001, flagged AD_MOBILIDADE = 'S').
+      demoPositivationOrders(notes).map((o) => ({
+        NUNOTA: o.orderNumber + 1_000_000,
+        CODPARC: o.customerCode,
+        CODVEND: o.sellerCode,
+        CODTIPOPER: 1001,
+        STATUSNOTA: 'L',
+        DTNEG: `${o.month}-01`,
+        DTFATUR: null,
+        VLRNOTA: 0,
+        TIPMOV: 'P',
+        CANCELADO: 'N',
+      })),
+    ),
+    TGFTOP: [{ CODTIPOPER: 1001, TIPMOV: 'P', AD_MOBILIDADE: 'S' }],
+    TGFVAR: demoPositivationOrders(notes).map((o) => ({ NUNOTA: o.orderNumber, NUNOTAORIG: o.orderNumber + 1_000_000 })),
     TGFITE: notes.flatMap((n) =>
       n.items.map((i) => ({ NUNOTA: n.noteId, CODPROD: i.productCode, QTDNEG: Number(i.quantity), VLRTOT: Number(i.gross), VLRDESC: Number(i.discount) })),
     ),
@@ -190,23 +208,55 @@ const fromMicro = (units: bigint): number => Number(units) / MICRO;
 function answerSellerGoals(sql: string, tables: ErpTables): HttpResponse | null {
   if (!sql.includes(' FROM TGFMET ')) return null;
   if (!sql.includes('CODVEND > 0')) throw new Error(`mock cannot interpret SQL: ${sql}`);
-  const groups = new Map<string, { seller: number; month: string; value: bigint; quantity: bigint }>();
+  const groups = new Map<string, { seller: number; month: string; kind: 'G' | 'P'; value: bigint; quantity: bigint }>();
   for (const row of tables['TGFMET'] ?? []) {
     const seller = Number(row['CODVEND'] ?? 0);
     if (!(seller > 0)) continue;
     const month = String(row['DTREF']).slice(0, 7);
-    const id = `${seller}|${month}`;
-    const g = groups.get(id) ?? { seller, month, value: 0n, quantity: 0n };
+    const kind = Number(row['CODPROD'] ?? 0) === 0 ? 'G' : 'P';
+    const id = `${seller}|${month}|${kind}`;
+    const g = groups.get(id) ?? { seller, month, kind, value: 0n, quantity: 0n };
     g.value += micro(row['PREVREC']);
     g.quantity += micro(row['QTDPREV']);
     groups.set(id, g);
   }
-  const ordered = [...groups.values()].sort((a, b) => a.seller - b.seller || a.month.localeCompare(b.month));
+  const ordered = [...groups.values()].sort((a, b) => a.seller - b.seller || a.month.localeCompare(b.month) || a.kind.localeCompare(b.kind));
   if (sql.startsWith('SELECT COUNT(*) AS TOTAL FROM (SELECT 1 AS X FROM ')) return ok(['TOTAL'], [[ordered.length]]);
   const paging = /OFFSET (\d+) ROWS FETCH NEXT (\d+) ROWS ONLY$/.exec(sql);
   if (paging === null) throw new Error(`mock cannot interpret SQL: ${sql}`);
   const page = ordered.slice(Number(paging[1]), Number(paging[1]) + Number(paging[2]));
-  return ok(['CODVEND', 'MES', 'VLRMETA', 'QTDMETA'], page.map((g) => [g.seller, g.month, fromMicro(g.value), fromMicro(g.quantity)]));
+  return ok(['CODVEND', 'MES', 'TIPO', 'VLRMETA', 'QTDMETA'], page.map((g) => [g.seller, g.month, g.kind, fromMicro(g.value), fromMicro(g.quantity)]));
+}
+
+/**
+ * Interprets ONLY the positivation-order read (TGFCAB order x TGFVAR x TGFCAB child, grouped): the filters are applied as the real
+ * query states them (TOP flagged AD_MOBILIDADE = 'S' in TGFTOP, order TIPMOV 'P', child TIPMOV 'V'/'L', child not CANCELADO = 'S',
+ * month of DTFATUR or DTNEG), then grouped by customer, seller, month and order. The 12-month window is not interpreted.
+ */
+function answerPositivation(sql: string, tables: ErpTables): HttpResponse | null {
+  if (!sql.includes(' FROM TGFCAB P INNER JOIN TGFVAR V ')) return null;
+  const header = new Map((tables['TGFCAB'] ?? []).map((row) => [Number(row['NUNOTA']), row]));
+  const mobilityTops = new Set((tables['TGFTOP'] ?? []).filter((row) => row['AD_MOBILIDADE'] === 'S').map((row) => Number(row['CODTIPOPER'])));
+  const groups = new Map<string, { customer: number; seller: number; month: string; order: number }>();
+  for (const link of tables['TGFVAR'] ?? []) {
+    const order = header.get(Number(link['NUNOTAORIG']));
+    const child = header.get(Number(link['NUNOTA']));
+    if (order === undefined || child === undefined) continue;
+    if (!(Number(order['CODPARC']) > 0) || order['TIPMOV'] !== 'P' || !mobilityTops.has(Number(order['CODTIPOPER']))) continue;
+    if (!['V', 'L'].includes(String(child['TIPMOV'])) || child['CANCELADO'] === 'S') continue;
+    const date = String(child['DTFATUR'] ?? child['DTNEG'] ?? '');
+    if (date === '') continue;
+    const customer = Number(order['CODPARC']);
+    const seller = Number(order['CODVEND'] ?? 0);
+    const month = date.slice(0, 7);
+    groups.set(`${customer}|${order['NUNOTA']}|${month}`, { customer, seller, month, order: Number(order['NUNOTA']) });
+  }
+  const ordered = [...groups.values()].sort((a, b) => a.customer - b.customer || a.order - b.order || a.month.localeCompare(b.month));
+  if (sql.startsWith('SELECT COUNT(*) AS TOTAL FROM (SELECT 1 AS X FROM ')) return ok(['TOTAL'], [[ordered.length]]);
+  const paging = /OFFSET (\d+) ROWS FETCH NEXT (\d+) ROWS ONLY$/.exec(sql);
+  if (paging === null) throw new Error(`mock cannot interpret SQL: ${sql}`);
+  const page = ordered.slice(Number(paging[1]), Number(paging[1]) + Number(paging[2]));
+  return ok(['CODPARC', 'CODVEND', 'MES', 'NUNOTA'], page.map((g) => [g.customer, g.seller, g.month, g.order]));
 }
 
 /**
@@ -462,6 +512,8 @@ export class MockSankhya {
   #answer(sql: string): HttpResponse {
     const goals = answerSellerGoals(sql, this.tables);
     if (goals !== null) return goals;
+    const positivation = answerPositivation(sql, this.tables);
+    if (positivation !== null) return positivation;
     const aggregate = answerSalesHistory(sql, this.tables);
     if (aggregate !== null) return aggregate;
     const signatures = MEDIA_SIGNATURES_RE.exec(sql);

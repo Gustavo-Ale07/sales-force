@@ -15,6 +15,7 @@ export * from './customer-write.js';
 export * from './imports.js';
 export * from './orders.js';
 export * from './discount-limits.js';
+export * from './force-config.js';
 export * from './devices.js';
 export * from './approvals.js';
 export * from './release-queue.js';

@@ -91,6 +91,7 @@ export class FakePartnerBook {
       ...(changes.phone === undefined ? {} : { phone: changes.phone }),
       ...(changes.email === undefined ? {} : { email: changes.email }),
       ...(changes.notes === undefined ? {} : { notes: changes.notes }),
+      ...(changes.priceTableCode === undefined ? {} : { priceTableCode: changes.priceTableCode }),
     };
     this.partners[index] = { code, request };
     if (outcome.kind === 'created_then_error') throw outcome.error;

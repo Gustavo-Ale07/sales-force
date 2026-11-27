@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { auditLog, device, erpForceConfig, session } from '@salesforce/db';
+import { auditLog, device, forceConfig, session } from '@salesforce/db';
 import { DEMO_ACCOUNT_EMAILS } from '@salesforce/sankhya';
 import { and, eq, like } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -187,8 +187,8 @@ describe('revoked device', () => {
   });
 });
 
-describe('offline limit (from the ERP) and devices per account (Configuracoes)', () => {
-  it('days come from AD_FORCECFG (7 when empty) and are not editable; the device limit is admin only, validated and audited', async () => {
+describe('offline limit (Force configuration) and devices per account (Configuracoes)', () => {
+  it('days come from the Force configuration (7 by default) and are not editable; the device limit is admin only, validated and audited', async () => {
     const db = app.database.handle.db;
     expect((await app.call('manager', 'GET', '/device-settings')).status).toBe(403);
     expect((await app.call('manager', 'PUT', '/device-settings', { maxActiveDevices: 1 })).status).toBe(403);
@@ -198,10 +198,10 @@ describe('offline limit (from the ERP) and devices per account (Configuracoes)',
     expect((await app.call('admin', 'PUT', '/device-settings', { maxActiveDevices: 2 })).status).toBe(200);
     const audit = await auditActions('device.settings_changed');
     expect(audit.at(-1)?.detail).toMatchObject({ maxActiveDevices: 2, previousMaxActiveDevices: 1 });
-    await db.insert(erpForceConfig).values({ id: 1, daysWithoutSync: 3, defaultPriceTableCode: null, contentHash: 'c1', syncedAt: new Date('2026-11-26T00:00:00.000Z') });
+    await db.update(forceConfig).set({ maxDaysWithoutSync: 3 });
     expect((await appLogin('admin', { installId: install() })).json().device.offlineMaxDays).toBe(3);
     expect((await app.call('admin', 'GET', '/device-settings')).body).toEqual({ offlineMaxDays: 3, maxActiveDevices: 2 });
-    await db.delete(erpForceConfig);
+    await db.update(forceConfig).set({ maxDaysWithoutSync: 7 });
     await app.call('admin', 'PUT', '/device-settings', { maxActiveDevices: 1 });
   });
 });

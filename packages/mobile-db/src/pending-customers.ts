@@ -73,6 +73,8 @@ export interface PendingCustomerRequest {
   }[];
   /** Manager/admin only. */
   readonly sellerCode?: number;
+  /** ERP price table (CODTAB) chosen in the form; absent in a row queued by an older build (the server then uses the installation default). */
+  readonly priceTableCode?: number;
 }
 
 export interface PendingCustomerRecord {

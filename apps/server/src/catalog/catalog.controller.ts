@@ -5,6 +5,7 @@ import {
   type ProductDetail,
   type CarriersResponse,
   type CitiesResponse,
+  type CustomerPriceTablesResponse,
   type NeighborhoodsResponse,
   type StreetsResponse,
   type PriceTablePricesResponse,
@@ -39,6 +40,11 @@ export class CatalogController {
   @ApiRoute(routes.listCities)
   cities(@CurrentUserParam() user: CurrentUser): Promise<CitiesResponse> {
     return this.catalog.listCities(user);
+  }
+
+  @ApiRoute(routes.listCustomerPriceTables)
+  customerPriceTables(@CurrentUserParam() user: CurrentUser): Promise<CustomerPriceTablesResponse> {
+    return this.catalog.listCustomerPriceTables(user);
   }
 
   @ApiRoute(routes.listNeighborhoods)

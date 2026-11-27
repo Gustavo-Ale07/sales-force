@@ -149,6 +149,13 @@ describe('CustomerDeliveryService', () => {
     expect(partners.partners[0]?.request).toMatchObject({ originField: 'AD_FORCEORIGEM', originKey: ORIGIN, priceTableCode: 5, sellerCode: 7 });
   });
 
+  it('writes the price table chosen in the command (CODTAB), not the installation setting', async () => {
+    const { service, store, partners } = build();
+    store.add({ ...COMMAND, priceTableCode: 9 });
+    await service.runDue();
+    expect(partners.partners[0]?.request).toMatchObject({ priceTableCode: 9 });
+  });
+
   describe('address registry (owner decision change 2026-11-26: Sandbox creation of neighborhood and street)', () => {
     const base = { cityCode: 5, streetCode: 0, neighborhoodCode: 0, streetName: null, neighborhoodName: null, number: '10', complement: null, postalCode: '01310100' };
 

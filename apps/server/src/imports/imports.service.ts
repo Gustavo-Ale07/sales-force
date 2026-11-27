@@ -282,6 +282,7 @@ export class ImportsService {
       sellerCodes: user.sellerCodes,
       allowedSellerCodes: scope.kind === 'sellers' ? scope.sellerCodes : null,
     };
+    const defaultPriceTableCode = await this.registrationRepository.defaultPriceTableCode();
     const outcomes: RowOutcome[] = [];
     const requests: { row: number; request: CreateCustomerRequest }[] = [];
     const seen = new Map<string, number>();
@@ -327,7 +328,7 @@ export class ImportsService {
         fail(firstZodMessage(draft.error.issues));
         continue;
       }
-      const prepared = prepareCustomerRegistration(draft.data, actor);
+      const prepared = prepareCustomerRegistration(draft.data, actor, defaultPriceTableCode);
       if (!prepared.ok) {
         fail(prepared.issues[0]?.message ?? 'Dados inválidos.');
         continue;

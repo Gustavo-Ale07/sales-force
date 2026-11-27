@@ -106,6 +106,11 @@ export const CreateCustomerRequestSchema = named(
     phone: CustomerFieldSchemas.phone.nullable().default(null),
     email: CustomerFieldSchemas.email.nullable().default(null),
     notes: CustomerFieldSchemas.notes.nullable().default(null),
+    /**
+     * The customer price table (ERP customer price table), chosen from the mirrored list. The screens always send it; absent only for builds
+     * that predate the field, in which case the server fills in the installation default. Validated server-side (P-08).
+     */
+    priceTableCode: codeInt().optional(),
     addresses: z.array(CustomerAddressInputSchema).max(MAX_CUSTOMER_ADDRESSES).default([]),
     /** Manager/admin only: the seller that owns the customer. A seller always owns what they create. */
     sellerCode: sellerCodeInt().optional(),
@@ -244,10 +249,12 @@ export const UpdateCustomerRequestSchema = named(
       phone: CustomerFieldSchemas.phone.nullable().optional(),
       email: CustomerFieldSchemas.email.nullable().optional(),
       notes: CustomerFieldSchemas.notes.nullable().optional(),
+      /** Sent only when the user changes the price table; never null. */
+      priceTableCode: codeInt().optional(),
       contacts: z.array(CustomerContactInputSchema).max(MAX_CUSTOMER_CONTACTS).optional(),
       addresses: z.array(CustomerAddressInputSchema).max(MAX_CUSTOMER_ADDRESSES).optional(),
     })
-    .refine((value) => ['phone', 'email', 'notes', 'contacts', 'addresses'].some((key) => (value as Record<string, unknown>)[key] !== undefined), {
+    .refine((value) => ['phone', 'email', 'notes', 'priceTableCode', 'contacts', 'addresses'].some((key) => (value as Record<string, unknown>)[key] !== undefined), {
       message: 'Informe ao menos um campo para alterar.',
     }),
 );

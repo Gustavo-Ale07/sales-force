@@ -14,8 +14,13 @@ function user(role: 'seller' | 'manager' | 'admin'): CurrentUser {
   return { accountId: 'a', role } as unknown as CurrentUser;
 }
 
-function build(scope: CustomerScope | AppError, options: { synced?: boolean } = {}) {
+function build(scope: CustomerScope | AppError, options: { synced?: boolean; positivationSynced?: boolean; orders?: { customerCode: number; sellerCode: number; month: string; orderNumber: number }[] } = {}) {
   const synced = options.synced ?? true;
+  const positivationSynced = options.positivationSynced ?? true;
+  const orders = options.orders ?? [
+    { customerCode: 1, sellerCode: 10, month: '2026-11', orderNumber: 100 },
+    { customerCode: 3, sellerCode: 20, month: '2026-11', orderNumber: 101 },
+  ];
   const seen = { goalScope: undefined as CustomerScope | undefined, portfolioScope: undefined as CustomerScope | undefined, sellersListed: 0 };
   const policy = {
     async accessContext() {
@@ -50,6 +55,12 @@ function build(scope: CustomerScope | AppError, options: { synced?: boolean } = 
     },
     async syncedAt() {
       return synced ? new Date('2026-11-26T10:00:00Z') : null;
+    },
+    async positivationSyncedAt() {
+      return positivationSynced ? new Date('2026-11-26T03:30:00Z') : null;
+    },
+    async monthPositivationOrders() {
+      return orders;
     },
   } as unknown as GoalsRepository;
   const history = {
@@ -98,12 +109,30 @@ describe('GoalsService (unit)', () => {
     expect(json).not.toMatch(/cost|margin|commission|custo|margem|comiss/i);
   });
 
-  it('without a sales-history sync the realized and positivation are unavailable, never zero', async () => {
+  it('without a sales-history sync the realized is unavailable, never zero, while positivation still comes from the order mirror', async () => {
     const { service } = build({ kind: 'all' }, { synced: false });
     const result = await service.get(user('admin'));
     expect(result.salesSyncedAt).toBeNull();
     expect(result.total.revenue.realized).toBeNull();
+    expect(result.total.positivation).toEqual({ positivated: 2, total: 3, percent: '66.7' });
+  });
+
+  it('without a billed-order sync the positivation is unavailable, never zero', async () => {
+    const { service } = build({ kind: 'all' }, { positivationSynced: false });
+    const result = await service.get(user('admin'));
     expect(result.total.positivation).toBeNull();
+  });
+
+  it('a synced mirror with no billed order in the month shows positivation 0, not missing data', async () => {
+    const { service } = build({ kind: 'sellers', sellerCodes: [10] }, { orders: [] });
+    const result = await service.get(user('seller'));
+    expect(result.total.positivation).toEqual({ positivated: 0, total: 2, percent: '0' });
+  });
+
+  it('an order of another seller positivates the portfolio customer of the scope', async () => {
+    const { service } = build({ kind: 'sellers', sellerCodes: [10] }, { orders: [{ customerCode: 2, sellerCode: 20, month: '2026-11', orderNumber: 7 }] });
+    const result = await service.get(user('seller'));
+    expect(result.total.positivation).toEqual({ positivated: 1, total: 2, percent: '50' });
   });
 
   it('a refusal from the policy (seller without link) propagates and nothing is read', async () => {

@@ -135,8 +135,6 @@ describe('mapping', () => {
       neighborhoods: dataset.neighborhoods.length,
       streets: dataset.streets.length,
       postalCodes: dataset.postalCodes.length,
-      forceConfig: dataset.forceConfig.length,
-      forceDiscountLimits: dataset.forceDiscountLimits.length,
     };
     for (const entity of MIRROR_ENTITIES) {
       if (isSnapshotReplaceEntity(entity)) {
@@ -241,6 +239,7 @@ describe('mapping', () => {
       readForceConfig: (o) => gateway.readForceConfig(o),
       readForceDiscountLimits: (o) => gateway.readForceDiscountLimits(o),
       readSellerGoals: (o) => gateway.readSellerGoals(o),
+      readPositivationOrders: (o) => gateway.readPositivationOrders(o),
       readIpiRates: (o) => gateway.readIpiRates(o),
       readOpenTitles: (o) => gateway.readOpenTitles(o),
       readSalesHistoryMonthly: (o) => gateway.readSalesHistoryMonthly(o),
@@ -345,6 +344,7 @@ describe('schedules, queues and locks', () => {
       streets: '20 */6 * * *',
       postalCodes: '20 */6 * * *',
       sellerGoals: '40 */2 * * *',
+      positivationOrders: '40 */2 * * *',
     });
     expect(Object.values(mirrorSchedulesFromSettings({ ...settings, SYNC_MIRROR_ENABLED: false })).every((cron) => cron === null)).toBe(
       true,

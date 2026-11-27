@@ -9,3 +9,4 @@ export * from './media.js';
 export * from './cnpj-cache.js';
 export * from './tasks.js';
 export * from './notifications.js';
+export * from './force-config.js';

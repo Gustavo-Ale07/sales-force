@@ -56,6 +56,9 @@ export function notesProblem(value: string): string | null {
 /* ---------- Edit ---------- */
 
 export interface EditForm {
+  /** The table chosen in the form; starts as the customer's current one. Sent only when it differs from `currentPriceTableCode`. */
+  priceTableCode: number | null;
+  currentPriceTableCode: number | null;
   phone: string;
   email: string;
   notes: string;
@@ -75,12 +78,21 @@ export interface UpdateCustomerBody {
   phone?: string;
   email?: string;
   notes?: string;
+  priceTableCode?: number;
 }
 
-export const emptyEditForm = (): EditForm => ({ phone: "", email: "", notes: "" });
+export const emptyEditForm = (currentPriceTableCode: number | null = null): EditForm => ({
+  phone: "",
+  email: "",
+  notes: "",
+  priceTableCode: currentPriceTableCode,
+  currentPriceTableCode,
+});
+
+const priceTableChanged = (form: EditForm): boolean => form.priceTableCode !== null && form.priceTableCode !== form.currentPriceTableCode;
 
 export function editProblems(form: EditForm): EditProblems {
-  const touched = form.phone.trim() !== "" || form.email.trim() !== "" || form.notes.trim() !== "";
+  const touched = form.phone.trim() !== "" || form.email.trim() !== "" || form.notes.trim() !== "" || priceTableChanged(form);
   return {
     phone: phoneProblem(form.phone),
     email: emailProblem(form.email),
@@ -105,6 +117,7 @@ export function buildUpdateBody(clientRequestId: string, form: EditForm): Update
     ...(form.phone.trim() === "" ? {} : { phone: digitsOf(form.phone) }),
     ...(form.email.trim() === "" ? {} : { email: form.email.trim() }),
     ...(form.notes.trim() === "" ? {} : { notes: form.notes.trim() }),
+    ...(priceTableChanged(form) && form.priceTableCode !== null ? { priceTableCode: form.priceTableCode } : {}),
   };
 }
 
@@ -138,6 +151,8 @@ export interface CreateForm {
   email: string;
   /** Only chosen by a user who is not a seller (manager and equivalent); a seller's customer is linked to them by the server. */
   sellerCode: number | null;
+  /** ERP price table (CODTAB); null = not chosen (mandatory). Starts as the installation default. */
+  priceTableCode: number | null;
 }
 
 export const emptyCreateForm = (): CreateForm => ({
@@ -160,10 +175,12 @@ export const emptyCreateForm = (): CreateForm => ({
   phone: "",
   email: "",
   sellerCode: null,
+  priceTableCode: null,
 });
 
 export interface CreateProblems {
   sellerCode: string | null;
+  priceTableCode: string | null;
   document: string | null;
   name: string | null;
   tradeName: string | null;
@@ -215,8 +232,11 @@ export function addressProblems(form: CreateForm): Pick<CreateProblems, "postalC
 }
 
 /** Screen 3 (Comercial): `sellerRequired` = the signed-in user is not a seller, so the form must carry the seller. */
-export function commercialProblems(form: CreateForm, options: { readonly sellerRequired?: boolean } = {}): Pick<CreateProblems, "sellerCode"> {
-  return { sellerCode: options.sellerRequired === true && form.sellerCode === null ? "Escolha o vendedor." : null };
+export function commercialProblems(form: CreateForm, options: { readonly sellerRequired?: boolean } = {}): Pick<CreateProblems, "sellerCode" | "priceTableCode"> {
+  return {
+    sellerCode: options.sellerRequired === true && form.sellerCode === null ? "Escolha o vendedor." : null,
+    priceTableCode: form.priceTableCode === null ? "Escolha a tabela de preço." : null,
+  };
 }
 
 export function createProblems(form: CreateForm, options: { readonly sellerRequired?: boolean } = {}): CreateProblems {
@@ -278,6 +298,7 @@ export interface CreateCustomerRequest {
   addresses: PendingCustomerRequest["addresses"][number][];
   /** Manager and equivalent only: the seller that owns the customer. Absent for a seller (linked automatically). */
   sellerCode?: number;
+  priceTableCode?: number;
 }
 
 const orNull = (value: string): string | null => (value.trim() === "" ? null : value.trim());
@@ -300,6 +321,7 @@ export function buildCreateRequest(form: CreateForm, options: { readonly sellerR
     notes: null,
     addresses: form.cityCode === null ? [] : [{ cityCode: form.cityCode, ...street, ...neighborhood, number: orNull(form.number), complement: orNull(form.complement), postalCode: cep.length === 8 ? cep : null }],
     ...(options.sellerRequired === true && form.sellerCode !== null ? { sellerCode: form.sellerCode } : {}),
+    ...(form.priceTableCode === null ? {} : { priceTableCode: form.priceTableCode }),
   };
 }
 
@@ -316,6 +338,7 @@ const FIELD_LABELS: Record<string, string> = {
   addresses: "Endereços",
   stateRegistration: "Inscrição estadual",
   sellerCode: "Vendedor",
+  priceTableCode: "Tabela de preço",
 };
 
 const REASON_TEXT: Record<string, string> = {

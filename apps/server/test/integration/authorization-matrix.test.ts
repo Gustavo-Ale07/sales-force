@@ -36,6 +36,12 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   updateDeviceSettings: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny', operations: 'deny' },
   getDiscountLimits: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny', operations: 'deny' },
   updateDiscountLimits: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny', operations: 'deny' },
+  getForceSettings: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
+  updateForceSettings: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
+  listSellerDiscountRules: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
+  createSellerDiscountRule: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
+  updateSellerDiscountRule: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
+  deleteSellerDiscountRule: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
   // Per-seller limits: manager and admin manage; the seller reads only its own rules (offline sync).
   getMyDiscountLimits: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   // Minimal order-entry slice: every role that can create an order needs it (unlike getConfiguration above).
@@ -60,6 +66,7 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   listCarriers: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   listCities: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   listNeighborhoods: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  listCustomerPriceTables: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   listStreets: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   lookupPostalCode: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   lookupCnpj: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },

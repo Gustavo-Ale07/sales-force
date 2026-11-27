@@ -1,15 +1,15 @@
 import { compareDecimalStrings, isDecimalString, normalizeDecimalString, type DecimalString } from './money.js';
 
 /**
- * Per-seller discount limit (owner ruling 2026-11-26, replaces "limit only from DESCMAX"). The same code runs on the
+ * Per-seller discount limit (rules kept in the Force database, owner ruling 2026-11-27; TGFVEN.DESCMAX is no longer used). The same code runs on the
  * server (revalidation, P-08/P-21) and in web and mobile (editor, offline). Pure and deterministic (P-14); no cost or
  * margin is read or returned (P-20).
  *
  * Resolution, innermost first: product rule > rule of the nearest ancestor group of the product (child before parent,
- * any depth) > seller general limit > the product's own ERP ceiling (DESCMAX) > no limit.
+ * any depth) > seller general rule > the product's own ERP ceiling (DESCMAX) > no limit.
  */
 
-export type SellerDiscountRuleKind = 'general' | 'group' | 'product';
+export type SellerDiscountRuleKind = 'general' | 'group' | 'subgroup' | 'product';
 
 export interface SellerDiscountRule {
   readonly kind: SellerDiscountRuleKind;
@@ -38,12 +38,16 @@ export function indexSellerDiscountRules(rules: readonly SellerDiscountRule[]): 
   let general: DecimalString | null = null;
   const groups = new Map<number, DecimalString>();
   const products = new Map<number, DecimalString>();
+  const subgroupCodes = new Set<number>();
   for (const rule of rules) {
     if (!isDecimalString(rule.percent)) continue;
     const percent = normalizeDecimalString(rule.percent);
     if (rule.kind === 'general') general = percent;
-    else if (rule.code !== null && rule.kind === 'group') groups.set(rule.code, percent);
-    else if (rule.code !== null && rule.kind === 'product') products.set(rule.code, percent);
+    else if (rule.code !== null && rule.kind === 'group' && !subgroupCodes.has(rule.code)) groups.set(rule.code, percent);
+    else if (rule.code !== null && rule.kind === 'subgroup') {
+      subgroupCodes.add(rule.code);
+      groups.set(rule.code, percent);
+    } else if (rule.code !== null && rule.kind === 'product') products.set(rule.code, percent);
   }
   return { general, groups, products };
 }

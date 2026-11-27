@@ -71,7 +71,7 @@ export function parseCustomerOriginKey(value: string | null | undefined): string
 }
 
 /** Fields a seller may change on an existing customer (D-AR 5). Anything else is rejected by the server. */
-export const CUSTOMER_EDITABLE_FIELDS = ['phone', 'email', 'contacts', 'addresses', 'notes'] as const;
+export const CUSTOMER_EDITABLE_FIELDS = ['phone', 'email', 'contacts', 'addresses', 'notes', 'priceTableCode'] as const;
 export type CustomerEditableField = (typeof CUSTOMER_EDITABLE_FIELDS)[number];
 
 /** The keys of an edit request that are not on the allow-list (allow-list, never a deny-list). */

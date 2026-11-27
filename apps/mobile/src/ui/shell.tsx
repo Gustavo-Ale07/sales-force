@@ -635,6 +635,8 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                 customerName={customerForm.customer.name}
                 code={customerForm.customer.code}
                 writer={dependencies.customerWrite}
+                currentPriceTableCode={customerForm.customer.priceTableCode ?? null}
+                {...(services?.addresses === undefined ? {} : { addresses: services.addresses })}
                 {...(pendingCustomers?.queueEdit !== undefined
                   ? {
                       queueOffline: (body) => {

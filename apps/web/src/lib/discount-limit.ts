@@ -75,7 +75,7 @@ export interface SellerLimitContext {
 }
 
 export function sellerLimitContext(
-  rules: readonly { kind: "general" | "group" | "product"; code: number | null; percent: string }[],
+  rules: readonly { kind: "general" | "group" | "subgroup" | "product"; code: number | null; percent: string }[],
   groups: readonly { code: number; parentCode: number | null }[],
 ): SellerLimitContext | null {
   if (rules.length === 0) return null;

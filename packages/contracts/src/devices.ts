@@ -29,7 +29,7 @@ export const SessionDeviceSchema = named(
     status: DeviceStatusSchema,
     /** Days the app may stay without a synchronization (configurable in Configuracoes; RF-IAM-8). */
     offlineMaxDays: z.number().int().min(1).max(60),
-    /** Price table of a customer without one (AD_FORCECFG, registered in the ERP; 5 when not filled in). */
+    /** Price table of a customer without one (Force configuration, edited on the site). */
     defaultPriceTableCode: z.number().int().min(0).optional(),
   }),
 );
@@ -78,7 +78,7 @@ export const DeviceSettingsSchema = named(
 );
 export type DeviceSettings = z.infer<typeof DeviceSettingsSchema>;
 
-/** `PUT /device-settings`: only the approved-devices limit is edited in the Force; the offline days come from the ERP (AD_FORCECFG, read-only). */
+/** `PUT /device-settings`: only the approved-devices limit is edited in the Force; the offline days are edited in `PUT /force-config`. */
 export const UpdateDeviceSettingsRequestSchema = named(
   'UpdateDeviceSettingsRequest',
   z.strictObject({ maxActiveDevices: z.number().int().min(1).max(5) }),

@@ -4,6 +4,7 @@ import {
   type ProductDetail,
   type CarriersResponse,
   type CitiesResponse,
+  type CustomerPriceTablesResponse,
   type NeighborhoodsResponse,
   type StreetsResponse,
   type ProductGroupsResponse,
@@ -17,7 +18,8 @@ import {
   type ResolveProductsRequest,
   type ResolveProductsResponse,
 } from '@salesforce/contracts';
-import { ipiRefOf, normalizeDecimalString, resolveCustomerPriceTable, isProductSellable, isProductVisible, type InstallationConfiguration, type IpiRef, type Product } from '@salesforce/domain';
+import { ipiRefOf, normalizeDecimalString, resolveCustomerPriceTable, resolveForceConfig, isProductSellable, isProductVisible, type InstallationConfiguration, type IpiRef, type Product } from '@salesforce/domain';
+import { ForceConfigRepository } from '../force-config/force-config.repository.js';
 import { CustomersService } from '../customers/customers.service.js';
 import { AppError } from '../http/app-error.js';
 import type { CurrentUser } from '../iam/current-user.js';
@@ -78,6 +80,7 @@ export class CatalogService {
     @Inject(CustomersService) private readonly customers: CustomersService,
     @Inject(PricingService) private readonly pricing: PricingService,
     @Inject(ProductImageService) private readonly images: ProductImageService,
+    @Inject(ForceConfigRepository) private readonly forceConfig: ForceConfigRepository,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -97,6 +100,15 @@ export class CatalogService {
   async listCities(user: CurrentUser): Promise<CitiesResponse> {
     await this.policy.accessContext(user);
     return { items: await this.mirror.listCities() };
+  }
+
+  /** Price tables selectable on a customer (reference data, no cost or margin); same access gate as the address lists. */
+  async listCustomerPriceTables(user: CurrentUser): Promise<CustomerPriceTablesResponse> {
+    await this.policy.accessContext(user);
+    const items = await this.mirror.listCustomerPriceTables();
+    const row = await this.forceConfig.settings();
+    const configured = resolveForceConfig(row === null ? null : { maxDaysWithoutSync: row.maxDaysWithoutSync, defaultPriceTableCode: row.defaultPriceTableCode }).defaultPriceTableCode;
+    return { items, defaultCode: items.some((item) => item.code === configured) ? configured : null };
   }
 
   async listNeighborhoods(user: CurrentUser): Promise<NeighborhoodsResponse> {

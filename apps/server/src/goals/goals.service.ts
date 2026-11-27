@@ -18,8 +18,8 @@ export function businessMonth(now: Date): string {
 /**
  * Goals, realized and positivation of the current month (RF-GOL-1/2). The scope comes from the central policy: a seller sees only their
  * own seller codes, manager and admin see the team inside the customer scope. Every figure is computed by the domain over mirrored data
- * (goal mirror, sales-history mirror, portfolio); there is no cost, margin or commission here (P-20). The sales-history read is not
- * narrowed by seller on purpose: a portfolio customer is positivated by a note of any seller, and the domain only reports the scope's rows.
+ * (goal mirror, sales-history mirror for revenue, billed-order mirror for positivation, portfolio); there is no cost, margin or commission here (P-20). The sales-history and billed-order reads are not
+ * narrowed by seller on purpose: a portfolio customer is positivated by an order of any seller, and the domain only reports the scope's rows.
  */
 @Injectable()
 export class GoalsService {
@@ -36,14 +36,17 @@ export class GoalsService {
     const month = businessMonth(this.clock());
     const showTeam = user.role === 'admin' || user.role === 'manager';
 
-    const [goals, goalsSyncedAt, salesSyncedAt, portfolio, sellers] = await Promise.all([
+    const [goals, goalsSyncedAt, salesSyncedAt, positivationSyncedAt, portfolio, sellers] = await Promise.all([
       this.goals.monthGoals(scope, month),
       this.goals.syncedAt(),
       this.history.monthlySyncedAt(),
+      this.goals.positivationSyncedAt(),
       this.mirror.portfolioCustomers(scope),
       showTeam ? this.mirror.listSellers({ scope }) : Promise.resolve([]),
     ]);
     const buckets = salesSyncedAt === null ? null : await this.history.monthlyBuckets({ scope: { kind: 'all' }, fromMonth: month, toMonth: month });
+
+    const positivationOrders = positivationSyncedAt === null ? null : await this.goals.monthPositivationOrders(month);
 
     const overview = buildGoalsOverview({
       month,
@@ -51,6 +54,7 @@ export class GoalsService {
       goals,
       buckets,
       portfolio,
+      positivationOrders,
     });
     const names = new Map(sellers.map((seller) => [seller.code, seller.name]));
     return {

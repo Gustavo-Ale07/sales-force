@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import { erpCustomer, integrationOutbox, type Database } from '@salesforce/db';
+import { erpCustomer, erpPriceTable, integrationOutbox, type Database } from '@salesforce/db';
 import { contactVersionOf } from './contact-version.js';
 import type { UpdateCustomerRequest, UpdateCustomerResponse } from '@salesforce/contracts';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { AppError } from '../http/app-error.js';
 import { AUDIT_ACTIONS, AuditService } from '../iam/audit.service.js';
 import type { CurrentUser } from '../iam/current-user.js';
@@ -55,6 +55,16 @@ export class CustomerUpdateService {
     @Inject(CUSTOMER_CONFIRM_WAIT) private readonly wait: CustomerConfirmWait,
   ) {}
 
+  private async activePriceTableExists(code: number): Promise<boolean> {
+    if (code > 2_147_483_647) return false;
+    const rows = await this.db
+      .select({ code: erpPriceTable.code })
+      .from(erpPriceTable)
+      .where(and(eq(erpPriceTable.code, code), eq(erpPriceTable.active, true), isNull(erpPriceTable.deletedAt)))
+      .limit(1);
+    return rows.length > 0;
+  }
+
   async update(user: CurrentUser, code: number, body: UpdateCustomerRequest): Promise<CustomerUpdateResult> {
     if (!this.enabled) {
       throw new AppError('conflict', {
@@ -80,6 +90,17 @@ export class CustomerUpdateService {
         message: 'Contatos e endereços ainda não podem ser alterados pelo Force. Altere telefone, e-mail ou observações.',
         details: { reason: 'customer_edit_field_not_supported', fields: unsupported },
       });
+    }
+
+    // P-08: a changed price table must be an active table of the mirror (mobility only); a made-up or stale code never reaches the ERP.
+    if (changes.priceTableCode !== undefined && !(await this.activePriceTableExists(changes.priceTableCode))) {
+      const message = 'Tabela de preço não encontrada ou inativa.';
+      await this.audit.record({
+        action: AUDIT_ACTIONS.customerUpdateRefused,
+        actorAccountId: user.accountId,
+        detail: { customerCode: code, fields: 'priceTableCode', reason: 'price_table_not_found' },
+      });
+      throw customerRefused({ priceTableCode: message }, [{ path: 'priceTableCode', code: 'price_table_not_found', message }]);
     }
 
     const fingerprint = createHash('sha256').update(JSON.stringify(['v1', code, canonical(changes)])).digest('hex');

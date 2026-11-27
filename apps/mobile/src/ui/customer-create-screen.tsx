@@ -8,6 +8,7 @@ import { colors } from "../theme";
 import { CityPicker, SuggestField } from "./address-fields";
 import { Banner, CheckRow, FormField, formStyles } from "./customer-form-parts";
 import { WizardFooter, WizardProgress } from "./order-wizard-parts";
+import { PriceTablePicker, type PriceTableChoice } from "./price-table-picker";
 import { SellerPicker } from "./seller-picker";
 
 export interface CustomerCreateScreenProps {
@@ -32,7 +33,7 @@ const LAST_STEP = STEP_LABELS.length - 1;
 const FIELD_STEP: Readonly<Record<string, number>> = {
   document: 0, name: 0, tradeName: 0, stateRegistration: 0, icmsClassification: 0,
   postalCode: 1, cityCode: 1, neighborhood: 1, neighborhoodName: 1, neighborhoodCode: 1, street: 1, streetName: 1, streetCode: 1, number: 1, complement: 1, phone: 1, email: 1,
-  sellerCode: 2,
+  sellerCode: 2, priceTableCode: 2,
 };
 /** Request field name -> the form field that shows it. */
 const FIELD_ALIAS: Readonly<Record<string, string>> = { neighborhoodName: "neighborhood", neighborhoodCode: "neighborhood", streetName: "street", streetCode: "street" };
@@ -47,6 +48,7 @@ const NO_ADDRESS_PORT: AddressPort = {
   searchCities: () => Promise.resolve([]),
   searchNeighborhoods: () => Promise.resolve([]),
   searchStreets: () => Promise.resolve([]),
+  customerPriceTables: () => Promise.resolve({ items: [], defaultCode: null }),
   lookupPostalCode: () => Promise.resolve(null),
 };
 
@@ -63,6 +65,20 @@ export function CustomerCreateScreen({ onSave, onClose, icmsOptions = [], seller
   const busy = useRef(false);
   const lastCep = useRef("");
   const lastCnpj = useRef("");
+  const [priceTables, setPriceTables] = useState<readonly PriceTableChoice[]>([]);
+
+  // The tables come from the local copy of the last sync (works offline); the field starts as the installation default.
+  useEffect(() => {
+    let current = true;
+    void addresses.customerPriceTables().then((answer) => {
+      if (!current) return;
+      setPriceTables(answer.items);
+      setForm((now) => (now.priceTableCode === null && answer.defaultCode !== null ? { ...now, priceTableCode: answer.defaultCode } : now));
+    });
+    return () => {
+      current = false;
+    };
+  }, [addresses]);
 
   const goBack = useCallback(() => {
     if (step === 0) onClose();
@@ -232,12 +248,16 @@ export function CustomerCreateScreen({ onSave, onClose, icmsOptions = [], seller
             <FormField label="E-mail" value={form.email} onChangeText={(email) => change({ email })} error={fieldError("email")} keyboardType="email-address" autoCapitalize="none" />
           </>
         )}
-        {step === 2 &&
-          (sellerRequired ? (
-            <SellerPicker sellers={sellers} selectedCode={form.sellerCode} onSelect={(sellerCode) => change({ sellerCode })} error={fieldError("sellerCode")} />
-          ) : (
-            <FormField label="Vendedor" value="Você" onChangeText={() => undefined} editable={false} error={serverFields.sellerCode ?? null} />
-          ))}
+        {step === 2 && (
+          <>
+            <PriceTablePicker tables={priceTables} selectedCode={form.priceTableCode} onSelect={(priceTableCode) => change({ priceTableCode })} error={fieldError("priceTableCode")} />
+            {sellerRequired ? (
+              <SellerPicker sellers={sellers} selectedCode={form.sellerCode} onSelect={(sellerCode) => change({ sellerCode })} error={fieldError("sellerCode")} />
+            ) : (
+              <FormField label="Vendedor" value="Você" onChangeText={() => undefined} editable={false} error={serverFields.sellerCode ?? null} />
+            )}
+          </>
+        )}
       </ScrollView>
       <WizardFooter
         onBack={goBack}

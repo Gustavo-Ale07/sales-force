@@ -51,11 +51,15 @@ export class CustomerRegistrationService {
     // A seller without a valid link is refused here (no_seller_scope); the technical profile is refused by the route policy.
     const scope = await this.policy.customerScope(user);
 
-    const prepared = prepareCustomerRegistration(body, {
-      role: user.role,
-      sellerCodes: user.sellerCodes,
-      allowedSellerCodes: scope.kind === 'sellers' ? scope.sellerCodes : null,
-    });
+    const prepared = prepareCustomerRegistration(
+      body,
+      {
+        role: user.role,
+        sellerCodes: user.sellerCodes,
+        allowedSellerCodes: scope.kind === 'sellers' ? scope.sellerCodes : null,
+      },
+      await this.registrations.defaultPriceTableCode(),
+    );
     // CUST-RT: validation refusals answer 422 with a field -> text map; no ERP call has happened and nothing is stored.
     if (!prepared.ok) {
       throw customerRefused(
@@ -70,6 +74,12 @@ export class CustomerRegistrationService {
     if (!(await this.registrations.activeSellerExists(payload.sellerCode))) {
       const issue = { path: 'sellerCode', code: 'seller_not_found', message: 'Vendedor não encontrado ou inativo.' };
       throw customerRefused({ sellerCode: issue.message }, [issue]);
+    }
+
+    // P-08: the price table must be an active table of the mirror (mobility only); a made-up or stale code never reaches the ERP.
+    if (!(await this.registrations.activePriceTableExists(payload.priceTableCode))) {
+      const issue = { path: 'priceTableCode', code: 'price_table_not_found', message: 'Tabela de preço não encontrada ou inativa.' };
+      throw customerRefused({ priceTableCode: issue.message }, [issue]);
     }
 
     const existing = await this.registrations.findByRequest(user.accountId, body.clientRequestId);

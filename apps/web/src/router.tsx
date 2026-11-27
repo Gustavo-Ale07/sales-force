@@ -235,6 +235,29 @@ const discountLimitsRoute = createRoute({
   ),
 });
 
+const forceSettingsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/parametros",
+  staticData: { crumb: "Parâmetros" },
+  // Admin and manager; the server (getForceSettings) is what enforces it.
+  beforeLoad: async ({ context }) => {
+    const user = await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
+    if (!user || (user.role !== "admin" && user.role !== "manager")) throw redirect({ to: "/" });
+  },
+  component: lazyRouteComponent(() => import("./routes/force-settings"), "ForceSettingsPage"),
+});
+
+const sellerDiscountRulesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/descontos-representante",
+  staticData: { crumb: "Descontos por representante" },
+  beforeLoad: async ({ context }) => {
+    const user = await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
+    if (!user || (user.role !== "admin" && user.role !== "manager")) throw redirect({ to: "/" });
+  },
+  component: lazyRouteComponent(() => import("./routes/seller-discount-rules"), "SellerDiscountRulesPage"),
+});
+
 const devicesRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/aparelhos",
@@ -318,6 +341,8 @@ const appChildren = [
   integrationRoute,
   settingsRoute,
   discountLimitsRoute,
+  forceSettingsRoute,
+  sellerDiscountRulesRoute,
   devicesRoute,
   approvalsRoute,
   tarefasRoute,

@@ -51,7 +51,7 @@
 --   erp_seller, erp_customer, erp_product, erp_product_group,
 --   erp_price_table, erp_price_table_version,
 --   erp_list_price                        S           S I U          worker mirror-writer upserts + soft delete (no DELETE). API is read-only (mirror.repository)
---   erp_sales_history_monthly, erp_seller_goal,
+--   erp_sales_history_monthly, erp_seller_goal, erp_positivation_order,
 --   erp_sales_history_customer_product    S           S I D          sales-history snapshots (stage D): the worker REPLACES the whole window in one transaction (DELETE + INSERT, no UPDATE). API is read-only (sales-history repository)
 --                                         + column UPDATE (synced_at) on erp_customer for force_api only: templates.repository takes
 --                                           SELECT ... FOR SHARE on the customer row, and PostgreSQL requires an UPDATE privilege for any
@@ -69,6 +69,8 @@
 --   cnpj_lookup_cache                     S I U       -              cnpj.service: cache of the public CNPJ lookup (no worker access)
 --   device                                S I U       -              device.repository: registration, approval, last-seen/last-sync
 --   device_setting                        S I U       -              device.repository: installation-wide device settings (offline max days)
+--   force_config                          S I U       -              force-config.repository: installation parameters (days without sync, default price table), single row
+--   seller_discount_rule                  S I U D     -              force-config.repository: per-seller discount ceilings edited on the site
 --   activity_task                         S I U       S U            tasks.repository (api); the notification sweep reads due tasks and flags the reminder sent (worker S U)
 --   notification                          S U         S I U          api marks as read; the notification sweep creates and pushes them (worker S I U)
 --   push_device                           S I U       S U            api registers the Expo token; the sweep disables dead tokens (worker S U)
@@ -270,6 +272,8 @@ BEGIN
       ('cnpj_lookup_cache',               'force_api',    'SELECT, INSERT, UPDATE'),
       ('device',                          'force_api',    'SELECT, INSERT, UPDATE'),
       ('device_setting',                  'force_api',    'SELECT, INSERT, UPDATE'),
+      ('force_config',                    'force_api',    'SELECT, INSERT, UPDATE'),
+      ('seller_discount_rule',            'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('activity_task',                   'force_api',    'SELECT, INSERT, UPDATE'),
       ('notification',                    'force_api',    'SELECT, UPDATE'),
       ('push_device',                     'force_api',    'SELECT, INSERT, UPDATE'),
@@ -294,6 +298,7 @@ BEGIN
       ('erp_product_group',                  'force_api',    'SELECT'),
       ('erp_sales_history_monthly',          'force_api',    'SELECT'),
       ('erp_seller_goal',                    'force_api',    'SELECT'),
+      ('erp_positivation_order',             'force_api',    'SELECT'),
       ('erp_sales_history_customer_product', 'force_api',    'SELECT'),
       ('erp_price_table',                    'force_api',    'SELECT'),
       ('erp_price_table_version',            'force_api',    'SELECT'),
@@ -327,6 +332,7 @@ BEGIN
       ('erp_product_group',                  'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_sales_history_monthly',          'force_worker', 'SELECT, INSERT, DELETE'),
       ('erp_seller_goal',                    'force_worker', 'SELECT, INSERT, DELETE'),
+      ('erp_positivation_order',             'force_worker', 'SELECT, INSERT, DELETE'),
       ('erp_sales_history_customer_product', 'force_worker', 'SELECT, INSERT, DELETE'),
       ('erp_price_table',                    'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_price_table_version',            'force_worker', 'SELECT, INSERT, UPDATE'),

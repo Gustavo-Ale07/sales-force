@@ -10,6 +10,7 @@ import {
   Secret,
   buildPartnerCreateRequestText,
   buildPartnerEditRequestText,
+  buildPartnerLocalFields,
   classifyPartnerRefusal,
   createGateway,
   type CustomerWriteSettings,
@@ -195,13 +196,13 @@ describe('real partner adapter: payload (D-AP / D-AQ / D-AR)', () => {
 
   it('creation always sends TIPGERBOLCENT = I (owner order 2026-11-26), for both person types', () => {
     expect(localFields(request())['TIPGERBOLCENT']).toEqual({ $: 'I' });
-    const individual = request({ personType: 'individual', document: CPF, stateRegistration: null, sellerCode: null, priceTableCode: null, addresses: [] });
+    const individual = request({ personType: 'individual', document: CPF, stateRegistration: null, sellerCode: null, priceTableCode: 5, addresses: [] });
     expect(localFields(individual)['TIPGERBOLCENT']).toEqual({ $: 'I' });
     expect(PARTNER_FORBIDDEN_COLUMNS).not.toContain('TIPGERBOLCENT');
   });
 
   it('NEVER sends LIMCRED nor any other forbidden column, and never a Vidya origin column', () => {
-    for (const req of [request(), request({ personType: 'individual', document: CPF, stateRegistration: null, sellerCode: null, priceTableCode: null, addresses: [] })]) {
+    for (const req of [request(), request({ personType: 'individual', document: CPF, stateRegistration: null, sellerCode: null, priceTableCode: 5, addresses: [] })]) {
       const text = buildPartnerCreateRequestText(req);
       expect(text).not.toContain('LIMCRED');
       for (const column of PARTNER_FORBIDDEN_COLUMNS) expect(Object.keys(localFields(req))).not.toContain(column);
@@ -443,7 +444,7 @@ describe('real partner adapter: error classification', () => {
 
 describe('partner edit request builder (D-AP; not on the port yet)', () => {
   const edit = (changes: Record<string, unknown>) => buildPartnerEditRequestText({ code: 5, changes: changes as never });
-  it.each([['name'], ['razaoSocial'], ['document'], ['creditLimit'], ['sellerCode'], ['priceTableCode'], ['active'], ['blocked']])('rejects %s before any call', (field) => {
+  it.each([['name'], ['razaoSocial'], ['document'], ['creditLimit'], ['sellerCode'], ['active'], ['blocked']])('rejects %s before any call', (field) => {
     expect(() => edit({ phone: '1', [field]: 'x' })).toThrowError(expect.objectContaining({ kind: 'validation', code: 'partner_edit_field_not_allowed', field }));
   });
   it('sends only phone, email and notes keyed by the partner code', () => {
@@ -452,6 +453,17 @@ describe('partner edit request builder (D-AP; not on the port yet)', () => {
     expect(Object.keys(body.requestBody.dataSet.dataRow.localFields).sort()).toEqual(['EMAIL', 'OBSERVACOES', 'TELEFONE']);
     expect(JSON.stringify(body)).not.toContain('LIMCRED');
     expect(JSON.stringify(body)).not.toContain('TIPGERBOLCENT');
+  });
+  it('sends CODTAB only when the price table is changed (and never null)', () => {
+    const body = JSON.parse(edit({ priceTableCode: 5 })) as { requestBody: { dataSet: { dataRow: { localFields: Record<string, unknown> } } } };
+    expect(body.requestBody.dataSet.dataRow.localFields).toEqual({ CODTAB: { $: '5' } });
+    expect(Object.keys((JSON.parse(edit({ phone: '1' })) as typeof body).requestBody.dataSet.dataRow.localFields)).toEqual(['TELEFONE']);
+    expect(() => edit({ priceTableCode: null })).toThrowError(expect.objectContaining({ code: 'partner_invalid_field' }));
+  });
+  it('creation requires a price table: CODTAB is always on the wire, null is refused before any call', () => {
+    expect(buildPartnerLocalFields(request({ priceTableCode: 5 }))['CODTAB']).toEqual({ $: '5' });
+    expect(buildPartnerLocalFields(request({ priceTableCode: 0 }))['CODTAB']).toEqual({ $: '0' });
+    expect(() => buildPartnerCreateRequestText(request({ priceTableCode: null }))).toThrowError(expect.objectContaining({ code: 'partner_required_field', field: 'priceTableCode' }));
   });
   it('contacts and addresses have no validated mapping: refused, not guessed; empty edit refused', () => {
     expect(() => edit({ contacts: [] })).toThrowError(expect.objectContaining({ code: 'partner_edit_unsupported' }));

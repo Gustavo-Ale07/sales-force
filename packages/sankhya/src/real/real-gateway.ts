@@ -7,6 +7,7 @@ import type {
   ForceConfig,
   ForceDiscountLimit,
   SellerGoal,
+  PositivationOrder,
   Customer,
   InstallationConfiguration,
   ListPrice,
@@ -151,6 +152,7 @@ import {
   FORCE_CONFIG_SPEC,
   FORCE_DISCOUNT_LIMIT_SPEC,
   SELLER_GOAL_SPEC,
+  POSITIVATION_ORDER_SPEC,
   IPI_RATE_SPEC,
   OPEN_TITLE_SPEC,
   salesHistoryCustomerProductSpec,
@@ -438,6 +440,9 @@ export class RealSankhyaGateway implements SankhyaGateway {
   }
   readSellerGoals(options?: ReadOptions): Snapshot<SellerGoal> {
     return this.#paged(SELLER_GOAL_SPEC, options);
+  }
+  readPositivationOrders(options?: ReadOptions): Snapshot<PositivationOrder> {
+    return this.#paged(POSITIVATION_ORDER_SPEC, options);
   }
   readCarriers(options?: ReadOptions): Snapshot<Carrier> {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
@@ -868,12 +873,12 @@ export class RealSankhyaGateway implements SankhyaGateway {
   async readPartnerEditableFields(code: number, options?: PartnerCallOptions): Promise<PartnerEditableFields | null> {
     this.#assertCustomerWrite();
     if (!Number.isInteger(code) || code < 1) throw invalidPartnerQuery('the partner code is not a positive integer');
-    const columns = ['CODPARC', 'TELEFONE', 'EMAIL', 'OBSERVACOES'] as const;
-    const result = await this.#query(`SELECT CODPARC, TELEFONE, EMAIL, OBSERVACOES FROM TGFPAR WHERE CODPARC = ${code}`, columns, options?.signal);
+    const columns = ['CODPARC', 'TELEFONE', 'EMAIL', 'OBSERVACOES', 'CODTAB'] as const;
+    const result = await this.#query(`SELECT CODPARC, TELEFONE, EMAIL, OBSERVACOES, CODTAB FROM TGFPAR WHERE CODPARC = ${code}`, columns, options?.signal);
     if (result.rows.length === 0) return null;
     if (result.rows.length > 1) throw ambiguousPartner('ambiguous_origin', [code], 'code');
     const row = new RowReader('customers', columns, result.rows[0] ?? [], 0);
-    return { phone: row.nullableText('TELEFONE'), email: row.nullableText('EMAIL'), notes: row.nullableText('OBSERVACOES') };
+    return { phone: row.nullableText('TELEFONE'), email: row.nullableText('EMAIL'), notes: row.nullableText('OBSERVACOES'), priceTableCode: row.nullableInt('CODTAB') };
   }
 
   async findOrderByOrigin(originField: string, originId: string, options?: OrderCallOptions): Promise<ErpOrderRef | null> {

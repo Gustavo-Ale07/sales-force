@@ -12,6 +12,7 @@ import { AuditService } from './audit.service.js';
 import { AuthController } from './auth.controller.js';
 import { DeviceController } from './device.controller.js';
 import { DeviceRepository } from './device.repository.js';
+import { ForceConfigRepository } from '../force-config/force-config.repository.js';
 import { DeviceService } from './device.service.js';
 import { AuthService } from './auth.service.js';
 import { assertSafeAuthConfig, type AuthConfig } from './auth-config.js';
@@ -59,6 +60,7 @@ export class IamModule {
         AccountPhotoService,
         SessionRepository,
         DeviceRepository,
+        ForceConfigRepository,
         DeviceService,
         ThrottleRepository,
         AuditService,

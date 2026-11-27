@@ -18,12 +18,20 @@ describe('CreateCustomerRequestSchema', () => {
     expect(parsed).toMatchObject({ icmsClassification: 'R', addresses: [], phone: null, email: null, notes: null });
   });
 
-  it.each(['creditLimit', 'priceTableCode', 'active', 'blocked', 'status', 'erpCode'])(
+  it.each(['creditLimit', 'priceTable', 'active', 'blocked', 'status', 'erpCode'])(
     'rejects the key %s instead of ignoring it',
     (key) => {
       expect(CreateCustomerRequestSchema.safeParse({ clientRequestId: ID, document: CNPJ, name: 'X', [key]: 1 }).success).toBe(false);
     },
   );
+
+  it('keeps the chosen price table and falls back to the installation default only when absent', () => {
+    const chosen = prepareCustomerRegistration(body({ priceTableCode: 9 }), seller, 5);
+    const fallback = prepareCustomerRegistration(body(), seller, 5);
+    expect(chosen.ok && chosen.value.payload.priceTableCode).toBe(9);
+    expect(fallback.ok && fallback.value.payload.priceTableCode).toBe(5);
+    expect(chosen.ok && fallback.ok && chosen.value.fingerprint !== fallback.value.fingerprint).toBe(true);
+  });
 
   it('rejects an ICMS class outside the allowed list', () => {
     expect(CreateCustomerRequestSchema.safeParse({ clientRequestId: ID, document: CNPJ, name: 'X', icmsClassification: 'Z' }).success).toBe(false);
@@ -32,14 +40,14 @@ describe('CreateCustomerRequestSchema', () => {
 
 describe('prepareCustomerRegistration', () => {
   it('normalizes the document, derives the person type and the origin key', () => {
-    const out = prepareCustomerRegistration(body(), seller);
+    const out = prepareCustomerRegistration(body(), seller, 5);
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.value.payload).toMatchObject({ document: '11222333000181', personType: 'company', originKey: `force:${ID}`, sellerCode: 7 });
   });
 
   it('accepts a valid CPF as an individual', () => {
-    const out = prepareCustomerRegistration(body({ document: CPF, stateRegistration: null }), seller);
+    const out = prepareCustomerRegistration(body({ document: CPF, stateRegistration: null }), seller, 5);
     expect(out.ok && out.value.payload.personType).toBe('individual');
   });
 
@@ -47,48 +55,48 @@ describe('prepareCustomerRegistration', () => {
     const issue = { path: 'stateRegistration', code: 'state_registration_required' };
 
     it('a company without IE is refused', () => {
-      expect(prepareCustomerRegistration(body({ stateRegistration: null }), seller)).toMatchObject({ ok: false, issues: [issue] });
+      expect(prepareCustomerRegistration(body({ stateRegistration: null }), seller, 5)).toMatchObject({ ok: false, issues: [issue] });
     });
 
     it('a company with an IE of up to 16 characters is accepted, kept as typed (no per-state format check)', () => {
-      const out = prepareCustomerRegistration(body({ stateRegistration: 'ab-12.345/6' }), seller);
+      const out = prepareCustomerRegistration(body({ stateRegistration: 'ab-12.345/6' }), seller, 5);
       expect(out.ok && out.value.payload.stateRegistration).toBe('ab-12.345/6');
     });
 
     it.each(['Isento', 'ISENTO', 'isento', ' iSeNtO '])('"%s" means exempt and is stored as ISENTO', (typed) => {
-      const out = prepareCustomerRegistration(body({ stateRegistration: typed }), seller);
+      const out = prepareCustomerRegistration(body({ stateRegistration: typed }), seller, 5);
       expect(out.ok && out.value.payload.stateRegistration).toBe('ISENTO');
     });
 
     it.each(['123', 'Isento', 'ISENTO', ' isento '])('an individual has no IE: "%s" is ignored, never an error (owner 2026-11-25)', (typed) => {
-      const out = prepareCustomerRegistration(body({ document: CPF, stateRegistration: typed }), seller);
+      const out = prepareCustomerRegistration(body({ document: CPF, stateRegistration: typed }), seller, 5);
       expect(out.ok).toBe(true);
       expect(out.ok && out.value.payload.stateRegistration).toBeNull();
     });
 
     it('the same individual with or without a typed IE has the same fingerprint', () => {
-      const a = prepareCustomerRegistration(body({ document: CPF, stateRegistration: 'Isento' }), seller);
-      const b = prepareCustomerRegistration(body({ document: CPF, stateRegistration: null }), seller);
+      const a = prepareCustomerRegistration(body({ document: CPF, stateRegistration: 'Isento' }), seller, 5);
+      const b = prepareCustomerRegistration(body({ document: CPF, stateRegistration: null }), seller, 5);
       if (!a.ok || !b.ok) throw new Error('expected ok');
       expect(a.value.fingerprint).toBe(b.value.fingerprint);
     });
 
     it('an individual without IE is accepted and carries none', () => {
-      const out = prepareCustomerRegistration(body({ document: CPF, stateRegistration: null }), seller);
+      const out = prepareCustomerRegistration(body({ document: CPF, stateRegistration: null }), seller, 5);
       expect(out.ok && out.value.payload.stateRegistration).toBeNull();
     });
   });
 
   it('refuses a document with wrong check digits', () => {
-    const out = prepareCustomerRegistration(body({ document: '11.222.333/0001-82' }), seller);
+    const out = prepareCustomerRegistration(body({ document: '11.222.333/0001-82' }), seller, 5);
     expect(out).toMatchObject({ ok: false, issues: [{ path: 'document', code: 'invalid_document' }] });
   });
 
   it('the same content has the same fingerprint, with or without punctuation, and any change alters it', () => {
-    const a = prepareCustomerRegistration(body(), seller);
-    const b = prepareCustomerRegistration(body({ document: '11222333000181' }), seller);
-    const c = prepareCustomerRegistration(body({ name: 'Outro Nome' }), seller);
-    const d = prepareCustomerRegistration(body({ clientRequestId: '0198f0a2-7b1c-7c3e-9a55-0123456789ac' }), seller);
+    const a = prepareCustomerRegistration(body(), seller, 5);
+    const b = prepareCustomerRegistration(body({ document: '11222333000181' }), seller, 5);
+    const c = prepareCustomerRegistration(body({ name: 'Outro Nome' }), seller, 5);
+    const d = prepareCustomerRegistration(body({ clientRequestId: '0198f0a2-7b1c-7c3e-9a55-0123456789ac' }), seller, 5);
     if (!a.ok || !b.ok || !c.ok || !d.ok) throw new Error('expected ok');
     expect(b.value.fingerprint).toBe(a.value.fingerprint);
     expect(c.value.fingerprint).not.toBe(a.value.fingerprint);
@@ -97,12 +105,12 @@ describe('prepareCustomerRegistration', () => {
 
   describe('owner seller', () => {
     it('a seller with one link owns what they create; a seller code in the body is ignored (owner 2026-11-25)', () => {
-      const out = prepareCustomerRegistration(body({ sellerCode: 9 }), seller);
+      const out = prepareCustomerRegistration(body({ sellerCode: 9 }), seller, 5);
       expect(out.ok && out.value.payload.sellerCode).toBe(7);
     });
 
     it('a seller without a linked code is refused', () => {
-      expect(prepareCustomerRegistration(body({ sellerCode: 9 }), { role: 'seller', sellerCodes: [] })).toMatchObject({
+      expect(prepareCustomerRegistration(body({ sellerCode: 9 }), { role: 'seller', sellerCodes: [] }, 5)).toMatchObject({
         ok: false,
         issues: [{ code: 'seller_not_linked' }],
       });
@@ -110,26 +118,26 @@ describe('prepareCustomerRegistration', () => {
 
     it('a seller with several links must name one of them', () => {
       const two = { role: 'seller', sellerCodes: [7, 8] } as const;
-      expect(prepareCustomerRegistration(body(), two)).toMatchObject({ ok: false, issues: [{ code: 'seller_not_linked' }] });
-      expect(prepareCustomerRegistration(body({ sellerCode: 9 }), two)).toMatchObject({ ok: false, issues: [{ code: 'seller_not_linked' }] });
-      const out = prepareCustomerRegistration(body({ sellerCode: 8 }), two);
+      expect(prepareCustomerRegistration(body(), two, 5)).toMatchObject({ ok: false, issues: [{ code: 'seller_not_linked' }] });
+      expect(prepareCustomerRegistration(body({ sellerCode: 9 }), two, 5)).toMatchObject({ ok: false, issues: [{ code: 'seller_not_linked' }] });
+      const out = prepareCustomerRegistration(body({ sellerCode: 8 }), two, 5);
       expect(out.ok && out.value.payload.sellerCode).toBe(8);
     });
 
     it('a manager or admin names the seller', () => {
-      const out = prepareCustomerRegistration(body({ sellerCode: 12 }), { role: 'manager', sellerCodes: [] });
+      const out = prepareCustomerRegistration(body({ sellerCode: 12 }), { role: 'manager', sellerCodes: [] }, 5);
       expect(out.ok && out.value.payload.sellerCode).toBe(12);
     });
 
     it('a manager without a linked code and without a named seller is refused, not guessed', () => {
-      expect(prepareCustomerRegistration(body(), { role: 'admin', sellerCodes: [] })).toMatchObject({
+      expect(prepareCustomerRegistration(body(), { role: 'admin', sellerCodes: [] }, 5)).toMatchObject({
         ok: false,
         issues: [{ path: 'sellerCode', code: 'seller_required' }],
       });
     });
 
     it('a manager with exactly one linked code uses it by default', () => {
-      const out = prepareCustomerRegistration(body(), { role: 'manager', sellerCodes: [3] });
+      const out = prepareCustomerRegistration(body(), { role: 'manager', sellerCodes: [3] }, 5);
       expect(out.ok && out.value.payload.sellerCode).toBe(3);
     });
   });

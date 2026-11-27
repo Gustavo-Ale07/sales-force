@@ -425,7 +425,7 @@ export async function clearProductGroups(tx: SqlExecutor): Promise<void> {
 /** The signed-in seller's own discount rules as `GET /discount-limits/mine` delivers them. `percent` is a decimal string. */
 export interface SellerDiscountLimits {
   readonly sellerCode: number | null;
-  readonly rules: readonly { readonly kind: "general" | "group" | "product"; readonly code: number | null; readonly percent: string }[];
+  readonly rules: readonly { readonly kind: "general" | "group" | "subgroup" | "product"; readonly code: number | null; readonly percent: string }[];
 }
 
 /** The seller's cached discount rules; `null` when the device never received them (the product ceiling alone applies). */
@@ -524,7 +524,7 @@ export const META_KEYS = {
   lastAuthAt: "session.last_online_at",
   /** Days this device may stay without contact with the server (AUTH-2, set in Configuracoes of the site); read by the offline lock. */
   deviceOfflineMaxDays: "session.device_offline_max_days",
-  /** Price table of a customer without one, from the ERP (AD_FORCECFG) through the device status. */
+  /** Price table of a customer without one, from the Force configuration, through the device status. */
   deviceDefaultPriceTable: "session.device_default_price_table",
 } as const;
 
