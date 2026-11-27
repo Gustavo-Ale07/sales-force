@@ -58,6 +58,8 @@ export function createOfflineServices(deps: {
   readonly remote: Repositories;
   readonly env?: OfflineEnv;
   readonly imageFileSystem?: ImageFileSystem;
+  /** Client for thumbnails (carries the code's key, never reports a 401 as a rejected code); defaults to `api`. */
+  readonly mediaApi?: ApiClient;
   readonly onUnexpectedError?: (error: unknown) => void;
   /** Device internet state (OS check), so a failed sync says "no internet" or "server unavailable" correctly. */
   readonly internetState?: () => InternetState;
@@ -147,7 +149,7 @@ export function createOfflineServices(deps: {
           : {
               productImages: createAccountProductImages({
                 db: deps.db,
-                api: deps.api,
+                api: deps.mediaApi ?? deps.api,
                 fs: deps.imageFileSystem,
                 ownerAccountId: account.id,
                 now: () => env.now().getTime(),

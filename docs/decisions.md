@@ -907,7 +907,7 @@ Source: the project owner (Gustavo), prompt of 2026-10-30 part 2 (`.claude/work/
 - **Servidor:** guarda só o SHA-256 de `k`; comparação em tempo constante; resposta 401 sem corpo; 20 falhas em 10 min por IP => 429; sem código ativo => falha fechada. Exceções: sondas `getHealth`/`getReady` e `GET /server-code/check`.
 - **REGRA:** o código NUNCA passa por tela (nem administrador gera ou vê). Só por comando via SSH: `deploy/scripts/server-code.sh <staging|production> show-hash` (confirma que há código ativo; mostra só o prefixo do hash e a data) e `rotate` (gera novo, derruba todas as sessões, audita `config.server_code_rotated` com actor `cli`, imprime o código uma única vez). Produção só recebe código quando o dono pedir.
 - **Riscos aceitos pelo dono:** o código é portador (quem o tem fala com a API; ainda precisa de usuário e senha); 2FA continua não existindo (P-11); `EventSource` e imagens do site usam fetch/blob ou fallback por polling; o app antigo (0.2.0) recebe 401 e precisa do APK 0.3.0 novo.
-- **A confirmar com o dono (navegação, mesma sessão):** o vendedor deixa de ter caminho de menu para `/metas` (só por URL). Registrado como decisão de navegação do dono, ainda a confirmar; não altera autorização (P-21).
+- **Navegação (metas):** o vendedor acessa as próprias metas pelo item "Metas" na barra do topo (só para o papel vendedor); gerente e administrador gerenciam metas em Parâmetros. Não altera autorização (P-21).
 - **Não muda:** P-11 (sem 2FA), P-20, P-21, PAR-1 (vale para site e app). Itens do §3.x e documentos que citam aprovação de aparelho como controle compensatório passam a citar SRV-1.
 
 ## 4. Status of the specification's decisions (spec §4)

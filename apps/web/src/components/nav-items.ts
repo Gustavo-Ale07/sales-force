@@ -1,13 +1,15 @@
 import { canAdministerDiscountLimits, canDecideApprovals, canSeeIntegration, canUseCommercial } from "@salesforce/contracts";
 import { isOperationsRole, OPERATIONS_HOME } from "../lib/operations-role";
-import { Bell, CalendarCheck, Hourglass, House, Package, Percent, Plug, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal, UserRound, Users, type LucideIcon } from "lucide-react";
+import { Bell, CalendarCheck, Hourglass, House, Package, Percent, Plug, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal, Target, UserRound, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
-  to: "/" | "/clientes" | "/produtos" | "/pedidos" | "/integracao" | "/configuracoes" | "/aprovacoes" | "/aguardando-liberacao" | "/tarefas" | "/notificacoes";
+  to: "/" | "/clientes" | "/produtos" | "/pedidos" | "/integracao" | "/configuracoes" | "/aprovacoes" | "/aguardando-liberacao" | "/tarefas" | "/metas" | "/notificacoes";
   label: string;
   icon: LucideIcon;
   /** Only the technical profile, whose top bar is the integration area (the administrator reaches it from the avatar menu). */
   integrationOnly?: boolean;
+  /** Only the seller: manager and administrator manage goals in Parâmetros. */
+  sellerOnly?: boolean;
   /** Only who decides discount approvals (manager, admin), W-20. */
   approverOnly?: boolean;
   /** Only when the API lets the caller see at least one release-queue sector (the count endpoint answered). */
@@ -25,6 +27,7 @@ const allNavItems: NavItem[] = [
   { to: "/pedidos", label: "Vendas", icon: ShoppingCart },
   { to: "/produtos", label: "Catálogo", icon: Package },
   { to: "/tarefas", label: "Tarefas", icon: CalendarCheck },
+  { to: "/metas", label: "Metas", icon: Target, sellerOnly: true },
   { to: "/notificacoes", label: "Notificações", icon: Bell },
   { to: "/aguardando-liberacao", label: "Aguardando liberação", icon: Hourglass, releaseQueueOnly: true },
   { to: "/aprovacoes", label: "Aprovações", icon: ShieldCheck, approverOnly: true },
@@ -39,6 +42,7 @@ const allNavItems: NavItem[] = [
 export function navItemsFor(role: string | undefined, approvals = false, releaseQueue = false): NavItem[] {
   return allNavItems.filter((item) => {
     if (isOperationsRole(role)) return item.to === OPERATIONS_HOME;
+    if (item.sellerOnly) return role === "seller";
     if (item.releaseQueueOnly) return releaseQueue && role !== undefined && canUseCommercial(role);
     // D-M: in `erp` mode the release belongs to Sankhya; the approvals screen does not exist for the user.
     if (item.approverOnly && !approvals) return false;

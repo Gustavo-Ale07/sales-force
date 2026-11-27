@@ -1,6 +1,6 @@
 import { SERVER_CODE_HEADER, encodeServerCode } from "@salesforce/contracts";
 import { addServer, loadStoredServer } from "./add-server";
-import { checkServerCode, connectionFromCode, onServerCodeRejected, setServerConnection, withServerCode, withServerCodeRequest, type ServerCodeStore } from "./server-connection";
+import { checkServerCode, connectionFromCode, onServerCodeRejected, setServerConnection, withServerCode, withServerCodeRequest, withServerCodeStream, type ServerCodeStore } from "./server-connection";
 import { createMobileApiClient } from "../data/api";
 
 const KEY = "A".repeat(43);
@@ -109,6 +109,30 @@ describe("header on every request and guard 401", () => {
     const session = withServerCodeRequest(async () => new Response(JSON.stringify({ code: "unauthenticated", message: "x" }), { status: 401, headers: { "content-type": "application/json" } }));
     await session(new Request("https://api.example.com/x"));
     expect(rejected).toHaveBeenCalledTimes(1);
+    off();
+  });
+
+  it("images and the stream carry the key, and an empty 401 there never reports the code as rejected", async () => {
+    setServerConnection(connectionFromCode(CODE));
+    const rejected = jest.fn();
+    const off = onServerCodeRejected(rejected);
+    const seen: (string | null)[] = [];
+    const media = createMobileApiClient("http://api.test/api", {
+      quietRejection: true,
+      fetch: async (request) => {
+        seen.push(request.headers.get(SERVER_CODE_HEADER));
+        return new Response(null, { status: 401 });
+      },
+    });
+    const image = await media.GET("/products/{code}/image", { params: { path: { code: 1 }, query: { variant: "thumb" } }, parseAs: "arrayBuffer" });
+    expect(image.response.status).toBe(401);
+    const stream = withServerCodeStream(async (_url, init) => {
+      seen.push(init.headers?.[SERVER_CODE_HEADER] ?? null);
+      return { ok: false, status: 401 };
+    });
+    expect((await stream("http://api.test/api/sync/events", { headers: { Accept: "text/event-stream" } })).status).toBe(401);
+    expect(seen).toEqual([KEY, KEY]);
+    expect(rejected).not.toHaveBeenCalled();
     off();
   });
 });

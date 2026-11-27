@@ -6,6 +6,11 @@ export type { ApiClient };
 export interface MobileApiClientOptions {
   /** Test seam: replaces the global `fetch`. */
   readonly fetch?: (request: Request) => Promise<Response>;
+  /**
+   * Media client (product images, profile photo): still carries the code's key, but a 401 never reports the code as rejected,
+   * so a failed image can never erase the code stored on the device. Only ordinary API calls do that.
+   */
+  readonly quietRejection?: boolean;
 }
 
 /**
@@ -23,7 +28,7 @@ export function createMobileApiClient(baseUrl: string, options: MobileApiClientO
     headers: { Accept: "application/json" },
     // Resolve the global lazily so test stubs installed after import are honoured.
     // Every request carries the server code's key (`X-Server-Code`); a guard 401 sends the app back to "Adicionar servidor".
-    fetch: withServerCodeRequest(options.fetch ?? ((request: Request) => globalThis.fetch(request))),
+    fetch: withServerCodeRequest(options.fetch ?? ((request: Request) => globalThis.fetch(request)), { reportRejection: options.quietRejection !== true }),
   });
 }
 

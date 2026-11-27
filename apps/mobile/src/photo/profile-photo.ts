@@ -32,7 +32,7 @@ export interface ProfilePhotoApi {
   fetch(signal: AbortSignal): Promise<ImageFetchOutcome>;
 }
 
-export function createProfilePhotoApi(api: ApiClient): ProfilePhotoApi {
+export function createProfilePhotoApi(api: ApiClient, mediaApi: ApiClient = api): ProfilePhotoApi {
   return {
     async upload(photo) {
       const result = await callApi(() =>
@@ -45,7 +45,7 @@ export function createProfilePhotoApi(api: ApiClient): ProfilePhotoApi {
     },
     async fetch(signal) {
       try {
-        const { data, response } = await api.GET("/me/photo", { headers: { Accept: "image/webp" }, parseAs: "arrayBuffer", signal });
+        const { data, response } = await mediaApi.GET("/me/photo", { headers: { Accept: "image/webp" }, parseAs: "arrayBuffer", signal });
         if (response.status === 404) return { kind: "absent" };
         if (!response.ok || !(data instanceof ArrayBuffer)) return { kind: "unavailable" };
         return { kind: "ok", bytes: new Uint8Array(data) };

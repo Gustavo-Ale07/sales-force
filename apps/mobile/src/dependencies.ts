@@ -20,7 +20,7 @@ import { createProfilePhotoStore } from "./photo/profile-photo-store";
 import { createProfilePhotoApi, createProfilePhotoService, type ProfilePhotoService } from "./photo/profile-photo";
 import { detectPhotoPicker } from "./photo/photo-picker";
 import type { SqlDatabase } from "@salesforce/mobile-db";
-import { serverCodeHeaders } from "./server/server-connection";
+import { withServerCodeStream } from "./server/server-connection";
 
 /** Everything the screens talk to. Each piece is a port, so tests and the future offline adapters plug in here. */
 export interface AppDependencies {
@@ -61,7 +61,9 @@ export function createAppDependencies(baseUrl: string, db: SqlDatabase): AppDepe
   connectivity.subscribe((state) => {
     internet = state;
   });
-  const photoApi = createProfilePhotoApi(api);
+  // Images (thumbnails, own photo) carry the code's key but a 401 there never counts as a rejected code.
+  const mediaApi = createMobileApiClient(baseUrl, { quietRejection: true });
+  const photoApi = createProfilePhotoApi(api, mediaApi);
   const profilePhoto = createProfilePhotoService({
     api: photoApi,
     store: createProfilePhotoStore({ fs: createExpoImageFileSystem("profile-photo"), fetchPhoto: (signal) => photoApi.fetch(signal) }),
@@ -88,13 +90,14 @@ export function createAppDependencies(baseUrl: string, db: SqlDatabase): AppDepe
       api,
       remote,
       imageFileSystem: createExpoImageFileSystem(),
+      mediaApi,
       internetState: () => internet,
       baseUrl,
       // No logger exists in the app yet: the line carries counts and hashes only, never records.
       onMirrorMismatch: (message) => console.warn(message),
       // `expo/fetch` streams the response body (the global fetch of React Native does not).
       // The stream carries the server code's key too (a guard 401 is caught by the ordinary API calls).
-      fetchStream: (url, init) => expoFetch(url, { ...init, headers: { ...init.headers, ...serverCodeHeaders() } }) as unknown as ReturnType<StreamFetch>,
+      fetchStream: withServerCodeStream((url, init) => expoFetch(url, init as never) as unknown as ReturnType<StreamFetch>) as unknown as StreamFetch,
     })),
   };
 }

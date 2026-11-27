@@ -35,14 +35,18 @@ describe("navItemsFor", () => {
 
   it("keeps the top bar to the daily areas and moves every configuration item out of it", () => {
     const daily = ["Início", "Clientes", "Vendas", "Catálogo", "Tarefas", "Notificações"];
-    expect(navItemsFor("seller").map((item) => item.label)).toEqual(daily);
-    expect(navItemsFor("seller", false, true).map((item) => item.label)).toEqual([...daily, "Aguardando liberação"]);
+    const sellerDaily = ["Início", "Clientes", "Vendas", "Catálogo", "Tarefas", "Metas", "Notificações"];
+    expect(navItemsFor("seller").map((item) => item.label)).toEqual(sellerDaily);
+    expect(navItemsFor("seller", false, true).map((item) => item.label)).toEqual([...sellerDaily, "Aguardando liberação"]);
+    expect(navItemsFor("manager").map((item) => item.label)).toEqual(daily);
+    expect(navItemsFor("admin").map((item) => item.label)).toEqual(daily);
     expect(navItemsFor("manager", true, true).map((item) => item.label)).toEqual([...daily, "Aguardando liberação", "Aprovações"]);
     expect(navItemsFor("admin", true, true).map((item) => item.label)).toEqual([...daily, "Aguardando liberação", "Aprovações"]);
     expect(navItemsFor("technical", true, true).map((item) => item.label)).toEqual(["Integração", "Configurações"]);
     for (const role of ["seller", "manager", "admin"]) {
       const labels = navItemsFor(role, true, true).map((item) => item.label);
-      for (const configuration of ["Metas", "Parâmetros", "Descontos por representante", "Limites de desconto", "Aparelhos", "Perfil"]) {
+      if (role !== "seller") expect(labels).not.toContain("Metas");
+      for (const configuration of ["Parâmetros", "Descontos por representante", "Limites de desconto", "Aparelhos", "Perfil"]) {
         expect(labels).not.toContain(configuration);
       }
     }

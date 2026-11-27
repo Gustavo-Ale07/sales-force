@@ -76,7 +76,7 @@ Lotes (definidos pelo dono): 1 e 2 em andamento hoje; 3 e 4 NÃO iniciar; FORA =
 | Remoção da aprovação de aparelhos (SRV-1, 27/11) | removida | removida | sim | M | sim | 27/11 | decidido; substitui AUTH-2 | |
 | Navegação do site: Parâmetros no menu do avatar (só gerente/admin) | exceção só-site | n/a (sem tela de edição) | só site por natureza | P | não | 27/11 | exceção só-site | |
 | Aba Metas do site (27/11) | sem painel de metas; o painel segue só no app | painel de metas só no app | exceção declarada | P | não | 27/11 | decidido | |
-| Vendedor sem caminho de menu para `/metas` (só por URL) | decisão de navegação do dono | n/a | a confirmar | P | não | 27/11 | A CONFIRMAR com o dono | |
+| Vendedor acessa as próprias metas pelo menu | item "Metas" na barra do topo (só vendedor) | tela Metas já existe no app | igual | P | não | 27/11 | resolvido | |
 | Metas e positivação (27/11) | mesma API (meta geral OU soma dos produtos; positivação via TGFVAR) | mesma API; painel de metas só no app (exceção declarada prévia) | parcial | M | sim | 27/11 | feito no servidor; painel só no app; realizado null | 838c400e |
 | Editar pedido (27/11) | só Duplicar | só Duplicar | sim | G | depende do Sankhya | — | pendente: nenhum caminho seguro (spike §9.67) | |
 

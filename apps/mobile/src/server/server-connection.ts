@@ -91,13 +91,24 @@ export function withServerCode<F extends FetchLike>(base: F): F {
 }
 
 /** Same as `withServerCode` for the API client, whose fetch takes a ready `Request`. */
-export function withServerCodeRequest(base: (request: Request) => Promise<Response>): (request: Request) => Promise<Response> {
+export function withServerCodeRequest(
+  base: (request: Request) => Promise<Response>,
+  options: { readonly reportRejection?: boolean } = {},
+): (request: Request) => Promise<Response> {
   return async (request) => {
     for (const [name, value] of Object.entries(serverCodeHeaders())) request.headers.set(name, value);
     const response = await base(request);
-    if (await isGuardRejection(response)) notifyServerCodeRejected();
+    if (options.reportRejection !== false && (await isGuardRejection(response))) notifyServerCodeRejected();
     return response;
   };
+}
+
+/**
+ * Wraps the streaming fetch (`/sync/events`): carries the key, and never reports a rejection, so a 401 of the stream
+ * cannot erase the stored code (the ordinary API calls decide that).
+ */
+export function withServerCodeStream<R>(base: (url: string, init: { headers?: Record<string, string> } & Record<string, unknown>) => R) {
+  return (url: string, init: { headers?: Record<string, string> } & Record<string, unknown>): R => base(url, { ...init, headers: { ...init.headers, ...serverCodeHeaders() } });
 }
 
 export type CodeCheck = { readonly ok: true; readonly connection: ServerConnection } | { readonly ok: false };
