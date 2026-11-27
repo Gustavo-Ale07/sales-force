@@ -52,7 +52,6 @@ export const ERROR_CATALOG = {
   sync_failed: { title: "Não foi possível sincronizar", message: "A sincronização não terminou. Os dados anteriores e seus pedidos salvos continuam no aparelho.", action: "retry" },
   internal_error: { title: "Erro no servidor", message: "Algo falhou do nosso lado. Tente de novo.", action: "retry" },
   not_found: { title: "Não encontrado", message: "Este registro não existe mais. Sincronize para atualizar.", action: "go_sync" },
-  device_revoked: { title: "Aparelho bloqueado", message: "Este aparelho foi desativado. Fale com o backoffice.", action: "none" },
 
   // Orders
   validation_failed: { title: "Dados inválidos", message: "Revise o pedido e tente de novo.", action: "edit_items" },

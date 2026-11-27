@@ -1,5 +1,6 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
 import { useState } from "react";
+import { useGuardedImageSrc } from "../lib/guarded-image";
 
 type ProductImageMeta = ApiSchema<"ProductImage">;
 export type ProductImageVariant = "thumb" | "full";
@@ -45,7 +46,9 @@ export function ProductImage({ image, description, name, variant = "thumb", size
   // original must never be shipped into list boxes. A failed request shows the initials placeholder.
   const [failed, setFailed] = useState<string[]>([]);
   const primary = image ? productImageSrc(image, variant) : null;
-  const src = primary !== null && !failed.includes(primary) ? primary : null;
+  // The photo is downloaded through the guarded client (an <img src> cannot send X-Server-Code) and shown from a blob URL; until then, or on failure, the placeholder stays.
+  const blob = useGuardedImageSrc(primary !== null && !failed.includes(primary) ? primary : null);
+  const src = blob;
   const size = sizeOverride ?? SIZES[variant];
   const box = `${variant === "thumb" ? "rounded" : "rounded-md"} border border-line bg-surface-2 shrink-0 ${className ?? ""}`;
 
@@ -58,7 +61,7 @@ export function ProductImage({ image, description, name, variant = "thumb", size
         height={size}
         loading="lazy"
         decoding="async"
-        onError={() => setFailed((current) => [...current, src])}
+        onError={() => primary !== null && setFailed((current) => [...current, primary])}
         className={`${box} object-contain`}
         style={{ width: size, height: size }}
       />

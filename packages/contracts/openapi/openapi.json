@@ -27,9 +27,6 @@
       "name": "dashboard"
     },
     {
-      "name": "devices"
-    },
-    {
       "name": "goals"
     },
     {
@@ -49,6 +46,9 @@
     },
     {
       "name": "sellers"
+    },
+    {
+      "name": "server-code"
     },
     {
       "name": "sync"
@@ -1054,21 +1054,20 @@
         }
       }
     },
-    "/devices/me": {
+    "/app-config": {
       "get": {
-        "operationId": "getMyDevice",
+        "operationId": "getAppConfig",
         "tags": [
-          "devices"
+          "configuration"
         ],
-        "summary": "Status of the calling device (M-02, M-19)",
-        "description": "null device = the session was not opened from a registered app installation. A pending device may call this route and logout only; a revoked one gets 401 device_revoked (the app wipes its local database).",
+        "summary": "App parameters of the Force configuration (days without sync, default price table)",
         "responses": {
           "200": {
-            "description": "Aparelho da sessão",
+            "description": "Parâmetros do app",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MyDeviceResponse"
+                  "$ref": "#/components/schemas/SessionAppConfig"
                 }
               }
             }
@@ -1082,368 +1081,32 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           }
         }
       }
     },
-    "/devices/me/sync": {
-      "post": {
-        "operationId": "reportDeviceSync",
+    "/server-code/check": {
+      "get": {
+        "operationId": "checkServerCode",
         "tags": [
-          "devices"
+          "server-code"
         ],
-        "summary": "The app reports a completed synchronization (informational)",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeviceSyncReport"
-              }
-            }
-          }
-        },
+        "summary": "Validates the X-Server-Code header (204 when accepted)",
+        "description": "Public of any session, protected by the global server-code guard: a missing or wrong code is a bodiless 401 before this handler runs.",
+        "security": [],
         "responses": {
           "204": {
-            "description": "Registrado"
-          },
-          "400": {
-            "description": "Requisição inválida (validation_failed)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Não autenticado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Sem permissão para este recurso",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/devices": {
-      "get": {
-        "operationId": "listDevices",
-        "tags": [
-          "devices"
-        ],
-        "summary": "Mobile devices (W-36): admin all, manager the team only",
-        "parameters": [
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/DeviceStatus"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Aparelhos",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DevicesResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Requisição inválida (validation_failed)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Não autenticado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Sem permissão para este recurso",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/devices/{id}/approve": {
-      "post": {
-        "operationId": "approveDevice",
-        "tags": [
-          "devices"
-        ],
-        "summary": "Approve a pending device (audited)",
-        "description": "404 outside the caller scope; 409 conflict when the account already has the maximum number of approved devices or the device is not pending.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Aparelho aprovado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeviceView"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Não autenticado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Sem permissão para este recurso",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflito de estado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/devices/{id}/revoke": {
-      "post": {
-        "operationId": "revokeDevice",
-        "tags": [
-          "devices"
-        ],
-        "summary": "Revoke a device (audited): its next request tells the app to wipe",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Aparelho revogado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeviceView"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Não autenticado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Sem permissão para este recurso",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflito de estado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/device-settings": {
-      "get": {
-        "operationId": "getDeviceSettings",
-        "tags": [
-          "devices"
-        ],
-        "summary": "Offline limit and devices per account (Configuracoes, admin only)",
-        "responses": {
-          "200": {
-            "description": "Configuração de aparelhos",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeviceSettings"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Não autenticado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Sem permissão para este recurso",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "operationId": "updateDeviceSettings",
-        "tags": [
-          "devices"
-        ],
-        "summary": "Replace the device settings (admin only, audited)",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateDeviceSettingsRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Configuração salva",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeviceSettings"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Requisição inválida (validation_failed)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Não autenticado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Sem permissão para este recurso",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
+            "description": "Código aceito"
           }
         }
       }
@@ -7239,8 +6902,8 @@
           "expiresAt": {
             "$ref": "#/components/schemas/IsoTimestamp"
           },
-          "device": {
-            "$ref": "#/components/schemas/SessionDevice"
+          "appConfig": {
+            "$ref": "#/components/schemas/SessionAppConfig"
           }
         },
         "required": [
@@ -9417,172 +9080,6 @@
         "maxLength": 40,
         "pattern": "^\\d+(\\.\\d+)?$"
       },
-      "DevicePlatform": {
-        "type": "string",
-        "enum": [
-          "android",
-          "ios"
-        ]
-      },
-      "DeviceRegistration": {
-        "type": "object",
-        "properties": {
-          "installId": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9-]{8,64}$"
-          },
-          "label": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 80
-          },
-          "platform": {
-            "$ref": "#/components/schemas/DevicePlatform"
-          }
-        },
-        "required": [
-          "installId",
-          "label",
-          "platform"
-        ],
-        "additionalProperties": false
-      },
-      "DeviceSettings": {
-        "type": "object",
-        "properties": {
-          "offlineMaxDays": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 60
-          },
-          "maxActiveDevices": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 5
-          }
-        },
-        "required": [
-          "offlineMaxDays",
-          "maxActiveDevices"
-        ],
-        "additionalProperties": false
-      },
-      "DeviceStatus": {
-        "type": "string",
-        "enum": [
-          "pending",
-          "approved",
-          "revoked"
-        ]
-      },
-      "DeviceSyncReport": {
-        "type": "object",
-        "properties": {
-          "syncedAt": {
-            "$ref": "#/components/schemas/IsoTimestamp"
-          }
-        },
-        "required": [
-          "syncedAt"
-        ],
-        "additionalProperties": false
-      },
-      "DeviceView": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "accountId": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "accountName": {
-            "type": "string"
-          },
-          "accountUsername": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "platform": {
-            "$ref": "#/components/schemas/DevicePlatform"
-          },
-          "status": {
-            "$ref": "#/components/schemas/DeviceStatus"
-          },
-          "createdAt": {
-            "$ref": "#/components/schemas/IsoTimestamp"
-          },
-          "lastSeenAt": {
-            "$ref": "#/components/schemas/IsoTimestamp"
-          },
-          "lastSyncAt": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/IsoTimestamp"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "decidedAt": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/IsoTimestamp"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "decidedByName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "canManage": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "id",
-          "accountId",
-          "accountName",
-          "accountUsername",
-          "label",
-          "platform",
-          "status",
-          "createdAt",
-          "lastSeenAt",
-          "lastSyncAt",
-          "decidedAt",
-          "decidedByName",
-          "canManage"
-        ],
-        "additionalProperties": false
-      },
-      "DevicesResponse": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DeviceView"
-            }
-          }
-        },
-        "required": [
-          "items"
-        ],
-        "additionalProperties": false
-      },
       "DiscountAuthorityMode": {
         "type": "string",
         "enum": [
@@ -9704,9 +9201,6 @@
           "invalid_credentials",
           "access_not_configured",
           "app_not_permitted",
-          "device_pending",
-          "device_required",
-          "device_revoked",
           "forbidden",
           "not_found",
           "conflict",
@@ -10582,9 +10076,6 @@
               "web",
               "app"
             ]
-          },
-          "device": {
-            "$ref": "#/components/schemas/DeviceRegistration"
           }
         },
         "required": [
@@ -10782,25 +10273,6 @@
           "pending_validation",
           "validated"
         ]
-      },
-      "MyDeviceResponse": {
-        "type": "object",
-        "properties": {
-          "device": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SessionDevice"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "device"
-        ],
-        "additionalProperties": false
       },
       "MyDiscountLimitsResponse": {
         "type": "object",
@@ -14401,17 +13873,9 @@
         ],
         "additionalProperties": false
       },
-      "SessionDevice": {
+      "SessionAppConfig": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "status": {
-            "$ref": "#/components/schemas/DeviceStatus"
-          },
           "offlineMaxDays": {
             "type": "integer",
             "minimum": 1,
@@ -14423,8 +13887,6 @@
           }
         },
         "required": [
-          "id",
-          "status",
           "offlineMaxDays"
         ],
         "additionalProperties": false
@@ -15256,20 +14718,6 @@
           "reasonCode",
           "reasonMessage",
           "updatedAt"
-        ],
-        "additionalProperties": false
-      },
-      "UpdateDeviceSettingsRequest": {
-        "type": "object",
-        "properties": {
-          "maxActiveDevices": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 5
-          }
-        },
-        "required": [
-          "maxActiveDevices"
         ],
         "additionalProperties": false
       },

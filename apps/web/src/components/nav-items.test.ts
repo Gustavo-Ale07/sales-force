@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { navItemsFor } from "./nav-items";
+import { menuItemsFor, navItemsFor } from "./nav-items";
 
 describe("navItemsFor", () => {
   it("gives every item a distinct icon and a label", () => {
@@ -33,17 +33,27 @@ describe("navItemsFor", () => {
     expect(navItemsFor("seller", false, true).map((item) => item.to)).toContain("/aguardando-liberacao");
   });
 
-  it("keeps the flag default off and the other items per role unchanged", () => {
-    expect(navItemsFor("seller").map((item) => item.label)).toEqual(["Início", "Clientes", "Vendas", "Catálogo", "Perfil", "Tarefas", "Notificações", "Metas"]);
-    expect(navItemsFor("seller", false, true).map((item) => item.label)).toEqual(["Início", "Clientes", "Vendas", "Catálogo", "Perfil", "Tarefas", "Notificações", "Metas", "Aguardando liberação"]);
-    expect(navItemsFor("manager", true, true).map((item) => item.label)).toEqual(["Início", "Clientes", "Vendas", "Catálogo", "Perfil", "Tarefas", "Notificações", "Metas", "Aguardando liberação", "Aprovações", "Descontos por representante", "Parâmetros", "Aparelhos"]);
-    expect(navItemsFor("admin", true, true).map((item) => item.label)).toEqual([
-      "Início", "Clientes", "Vendas", "Catálogo", "Perfil", "Tarefas", "Notificações", "Metas", "Aguardando liberação", "Aprovações", "Limites de desconto", "Descontos por representante", "Parâmetros", "Aparelhos", "Integração", "Configurações",
-    ]);
+  it("keeps the top bar to the daily areas and moves every configuration item out of it", () => {
+    const daily = ["Início", "Clientes", "Vendas", "Catálogo", "Tarefas", "Notificações"];
+    expect(navItemsFor("seller").map((item) => item.label)).toEqual(daily);
+    expect(navItemsFor("seller", false, true).map((item) => item.label)).toEqual([...daily, "Aguardando liberação"]);
+    expect(navItemsFor("manager", true, true).map((item) => item.label)).toEqual([...daily, "Aguardando liberação", "Aprovações"]);
+    expect(navItemsFor("admin", true, true).map((item) => item.label)).toEqual([...daily, "Aguardando liberação", "Aprovações"]);
     expect(navItemsFor("technical", true, true).map((item) => item.label)).toEqual(["Integração", "Configurações"]);
+    for (const role of ["seller", "manager", "admin"]) {
+      const labels = navItemsFor(role, true, true).map((item) => item.label);
+      for (const configuration of ["Metas", "Parâmetros", "Descontos por representante", "Limites de desconto", "Aparelhos", "Perfil"]) {
+        expect(labels).not.toContain(configuration);
+      }
+    }
   });
 
-  it("keeps the app order Início, Clientes, Vendas, Catálogo, Perfil", () => {
-    expect(navItemsFor(undefined).map((item) => item.label).slice(0, 5)).toEqual(["Início", "Clientes", "Vendas", "Catálogo", "Perfil"]);
+  it("puts Parâmetros between Perfil and the rest of the avatar menu, for manager and administrator only", () => {
+    const labels = (role: string | undefined, approvals = false) => menuItemsFor(role, approvals).map((item) => item.label);
+    expect(labels("seller")).toEqual(["Perfil"]);
+    expect(labels("operations")).toEqual(["Perfil"]);
+    expect(labels("manager", true)).toEqual(["Perfil", "Parâmetros"]);
+    expect(labels("admin", false)).toEqual(["Perfil", "Parâmetros", "Integração", "Configurações"]);
+    expect(labels("admin", true)).toEqual(["Perfil", "Parâmetros", "Limites de desconto", "Integração", "Configurações"]);
   });
 });

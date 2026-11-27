@@ -1,4 +1,5 @@
 import { createApiClient, type ApiClient } from "@salesforce/contracts/client";
+import { clearServerCode, SERVER_CODE_HEADER, storedServerKey } from "./server-code";
 
 /**
  * The single API-client module of the web app (STACK-4/5): every request goes through the client generated from
@@ -18,12 +19,28 @@ export interface WebApiClientOptions {
   origin?: string;
 }
 
+/**
+ * Every API request carries the server key (`X-Server-Code`). A 401 with an empty body is the server-code guard
+ * answering (the session 401 always carries the error envelope): the stored code is dropped, which sends the app
+ * back to "Adicionar servidor".
+ */
+export async function fetchWithServerCode(
+  request: Request,
+  base: (request: Request) => Promise<Response> = (next) => globalThis.fetch(next),
+): Promise<Response> {
+  const key = storedServerKey();
+  if (key !== null) request.headers.set(SERVER_CODE_HEADER, key);
+  const response = await base(request);
+  if (response.status === 401 && key !== null && (await response.clone().text()).trim() === "") clearServerCode();
+  return response;
+}
+
 /** Same-origin API client. Cookies are sent (`credentials: same-origin`) and never handled by the app. */
 export function createWebApiClient(options: WebApiClientOptions = {}): ApiClient {
   const origin = options.origin ?? window.location.origin;
   return createApiClient(`${origin}${API_BASE_PATH}`, {
     // Resolve the browser fetch lazily: a captured reference would ignore later stubs and polyfills.
-    fetch: options.fetch ?? ((request: Request) => globalThis.fetch(request)),
+    fetch: (request: Request) => fetchWithServerCode(request, options.fetch),
     headers: { Accept: "application/json" },
   });
 }

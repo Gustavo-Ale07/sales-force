@@ -20,6 +20,7 @@ import {
   zeroList,
 } from "../test/fixtures";
 import { apiError, callsTo, renderApp } from "../test/harness";
+import { stubGuardedImages } from "../test/images";
 
 const FORBIDDEN_TERMS = /custo|margem|cost|margin/i;
 
@@ -263,13 +264,14 @@ describe("Catálogo (products)", () => {
   });
 
   it("lists thumbnails only (with the version), and a placeholder for a product without image", async () => {
+    const { requested } = stubGuardedImages();
     const image = { version: "h1", thumbnailUrl: "/api/v1/products/2001/image?variant=thumb", url: "/api/v1/products/2001/image?variant=full" };
     renderApp("/produtos", {
       handlers: { ...groups, "GET /products": { body: productsPage([product({ image }), product({ code: 2002, description: "Vela lisa" })]) } },
     });
     await screen.findByText("Vela lisa");
-    const img = document.querySelector('img[src*="products/2001/image"]');
-    expect(img).toHaveAttribute("src", "/api/v1/products/2001/image?variant=thumb&v=h1");
+    await waitFor(() => expect(document.querySelector('img[src^="blob:"]')).not.toBeNull());
+    expect(requested()).toContain("/api/v1/products/2001/image?variant=thumb&v=h1");
     expect(within(screen.getByText("Balão látex 9 pol. vermelho").closest("tr") as HTMLElement).queryByText("Vendável")).toBeNull();
     const row = screen.getByText("Vela lisa").closest("tr") as HTMLElement;
     expect(within(row).queryByRole("img")).toBeNull();

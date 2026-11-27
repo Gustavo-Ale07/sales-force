@@ -6,6 +6,7 @@ import * as Application from "expo-application";
 import { Directory, File, FileMode, Paths } from "expo-file-system";
 import * as IntentLauncher from "expo-intent-launcher";
 import { Platform } from "react-native";
+import { serverCodeHeaders, withServerCode } from "../server/server-connection";
 import { checkAndUpdate, type UpdateIo, type UpdateResult, type UpdateStep } from "./apk-update";
 import { Sha256 } from "./sha256";
 
@@ -23,7 +24,7 @@ function updateDirectory(): Directory {
 export function createDeviceIo(): UpdateIo {
   return {
     async fetchJson(url) {
-      const response = await fetch(url, { headers: { accept: "application/json" } });
+      const response = await withServerCode(fetch)(url, { headers: { accept: "application/json", ...serverCodeHeaders() } });
       if (!response.ok) throw new Error(`manifest ${response.status}`);
       return response.json();
     },
@@ -33,6 +34,7 @@ export function createDeviceIo(): UpdateIo {
       const target = new File(dir, "update.apk");
       const file = await File.downloadFileAsync(url, target, {
         idempotent: true,
+        headers: serverCodeHeaders(),
         onProgress: ({ bytesWritten, totalBytes }: { bytesWritten: number; totalBytes: number }) => onProgress(bytesWritten, totalBytes),
       });
       return file.uri;

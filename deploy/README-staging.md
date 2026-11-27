@@ -468,6 +468,18 @@ The volume is not part of the PostgreSQL dump or PITR. `deploy/staging/ops-media
 Not part of this stack. The mobile app reaches the public HTTPS host and must not depend on an allow-list or VPN.
 Mobile staging notes, if useful later, live under `.claude/work/` (working notes, not decisions).
 
+## Código de servidor (SRV-1, `docs/decisions.md` §3.23; runbook)
+
+Um código por ambiente substitui a aprovação de aparelho. Controle descrito em `docs/security-model.md` §4.1.
+
+- **Comando exato (via SSH, no host do ambiente):**
+  - `deploy/scripts/server-code.sh staging show-hash` confirma que existe código ativo e mostra só o prefixo do hash e a data.
+  - `deploy/scripts/server-code.sh staging rotate` gera novo código, derruba todas as sessões, audita `config.server_code_rotated` (actor `cli`) e imprime o código uma única vez.
+  - Produção (`production`) só recebe código quando o dono pedir.
+- **Quando rodar:** `rotate` uma vez, depois do deploy do primeiro commit que traz o guard (sem código ativo a API falha fechada, exceto sondas e `GET /server-code/check`). O código de staging foi gerado em 2026-11-27. Defina `SF_PUBLIC_API_URL` no ambiente antes. `SF_ALLOW_LEGACY_APP_LOGIN` não existe mais: remover do `api.env`.
+- **Regra:** o código NUNCA passa por tela (nem administrador gera ou vê) e nunca vai para git, docs, logs ou chat, além da entrega ao dono (uma vez, na saída do comando). Vazou ou houve dúvida: `rotate` e nova entrega.
+- Depois de `rotate`, todos os clientes recebem 401 até adicionar o código novo em "Adicionar servidor". O app 0.2.0 recebe 401 e precisa do APK 0.3.0.
+
 ## Validation status (what was and was not exercised)
 
 Exercised against throwaway containers (PostgreSQL 17 on a private Docker network, an `rclone serve s3` S3 endpoint,

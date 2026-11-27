@@ -524,7 +524,7 @@ describe('route registry', () => {
       .filter((r) => r.auth === 'public')
       .map((r) => r.operationId)
       .sort();
-    expect(publicRoutes).toEqual(['getHealth', 'getReady', 'getSession', 'login']);
+    expect(publicRoutes).toEqual(['checkServerCode', 'getHealth', 'getReady', 'getSession', 'login']);
   });
 });
 

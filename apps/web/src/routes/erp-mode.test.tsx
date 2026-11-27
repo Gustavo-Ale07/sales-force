@@ -2,7 +2,7 @@ import type { ApiSchema } from "@salesforce/contracts/client";
 import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { customerDetail, orderDetail, orderEntryConfiguration, ORDER_ID } from "../test/fixtures";
-import { callsTo, renderApp, type Handlers } from "../test/harness";
+import { callsTo, openUserMenu, renderApp, type Handlers } from "../test/harness";
 
 /** D-M: with `sales.discountAuthorityMode = 'erp'` Sankhya releases discounts; every Sales Force approval surface is hidden. */
 const erpConfig = (): ApiSchema<"OrderEntryConfiguration"> => ({
@@ -21,9 +21,10 @@ describe("modo erp (D-M)", () => {
   });
 
   it("keeps both entries in force mode", async () => {
-    renderApp("/", { handlers: forceHandlers, role: "admin" });
+    const { user } = renderApp("/", { handlers: forceHandlers, role: "admin" });
     expect((await screen.findAllByRole("link", { name: "Aprovações" })).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: "Limites de desconto" }).length).toBeGreaterThan(0);
+    await openUserMenu(user);
+    expect(await screen.findByRole("menuitem", { name: "Limites de desconto" })).toBeInTheDocument();
   });
 
   it("replaces the approvals and limits routes by an explanation, without loading their data", async () => {

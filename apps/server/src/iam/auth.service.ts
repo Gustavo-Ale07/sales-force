@@ -1,6 +1,6 @@
 import { Inject, Injectable, Optional, type OnModuleInit } from '@nestjs/common';
 import { isValidSellerCode, normalizeUsername } from '@salesforce/domain';
-import type { DeviceRegistration, LoginResponse as AuthenticatedSession } from '@salesforce/contracts';
+import type { LoginResponse as AuthenticatedSession } from '@salesforce/contracts';
 import { AppError } from '../http/app-error.js';
 import { errorLogFields, type Logger } from '../observability/logger.js';
 import { uuidv7 } from '../platform/ids.js';
@@ -9,7 +9,6 @@ import { AccountRepository } from './account.repository.js';
 import { AuditSampler } from './audit-sampler.js';
 import { AUDIT_ACTIONS, AuditService } from './audit.service.js';
 import { assertSafeAuthConfig, type AuthConfig } from './auth-config.js';
-import { DeviceService } from './device.service.js';
 import type { CurrentUser } from './current-user.js';
 import { HashLimiter } from './hash-limiter.js';
 import {
@@ -44,8 +43,6 @@ export interface RequestMeta {
   readonly requestId: string;
   /** Declared by the login body: `app` = the mobile app. Omitted = the site. Never trusted to GRANT anything, only to refuse. */
   readonly client?: 'web' | 'app';
-  /** The app installation declared by the login body (AUTH-2). Used only when `client` is `app`. */
-  readonly device?: DeviceRegistration;
 }
 
 export interface LoginResult {
@@ -134,7 +131,6 @@ export class AuthService implements OnModuleInit {
     @Inject(LOGGER) private readonly logger: Logger,
     @Optional() @Inject(EXTERNAL_IDENTITY_VERIFIER) private readonly externalVerifier?: ExternalIdentityVerifier,
     @Optional() @Inject(EXTERNAL_ACCOUNT_LINKS) private readonly externalLinks?: ExternalAccountLinks,
-    @Optional() @Inject(DeviceService) private readonly devices?: DeviceService,
   ) {
     assertSafeAuthConfig(config);
     this.#hashSlots = new HashLimiter(config.login.maxConcurrentHashes);
@@ -238,7 +234,6 @@ export class AuthService implements OnModuleInit {
     if (found.externalUserId !== null) throw new AppError('invalid_credentials');
     // Credentials proven and account usable: a profile with no mobile use never gets an app session (P-21, server-side).
     await this.refuseAppIfNotPermitted(found.id, found.role, meta, auditMeta, 'local');
-    const appDevice = await this.registerAppDevice(found, meta);
 
     // 3. Success: upgrade the hash if the cost parameters moved, open the session, then forget the failures
     // of this e-mail (the address counter is not reset by a success).
@@ -254,7 +249,7 @@ export class AuthService implements OnModuleInit {
     const sessionId = uuidv7(now.getTime());
     const expiresAt = new Date(now.getTime() + Math.min(this.config.sessionIdleMs, this.config.sessionAbsoluteMs));
     await this.openAuditedSession(
-      { id: sessionId, accountId: found.id, tokenHash: hashSessionToken(token), createdAt: now, expiresAt, deviceId: appDevice?.id ?? null },
+      { id: sessionId, accountId: found.id, tokenHash: hashSessionToken(token), createdAt: now, expiresAt },
       { ...auditMeta, sessionId },
     );
     await this.throttle.clear(loginKey);
@@ -269,7 +264,6 @@ export class AuthService implements OnModuleInit {
       sessionId,
       sessionExpiresAt: expiresAt,
       channel: 'web',
-      ...(appDevice === null ? {} : { deviceId: appDevice.id, deviceStatus: appDevice.status }),
     };
     return { token, user };
   }
@@ -412,7 +406,6 @@ export class AuthService implements OnModuleInit {
     // Same mode restriction as the password login and the session reads: a role the mode does not admit never gets a session.
     if (!this.roleMayHoldSession(found.role, true)) return this.failExternal('external_mode_role_not_permitted', found.id, failCtx);
     await this.refuseAppIfNotPermitted(found.id, found.role, meta, auditMeta, 'external');
-    const appDevice = await this.registerAppDevice(found, meta);
 
     // 4. Link reconciliation, fail closed. The login proves ONLY the directory identity; scope comes only from the
     // account's own seller link (never from the directory, a name or the login). A seller account must have a link.
@@ -457,7 +450,7 @@ export class AuthService implements OnModuleInit {
     const sessionId = uuidv7(now.getTime());
     const expiresAt = new Date(now.getTime() + Math.min(this.config.sessionIdleMs, this.config.sessionAbsoluteMs));
     await this.openAuditedSession(
-      { id: sessionId, accountId: found.id, tokenHash: hashSessionToken(token), createdAt: now, expiresAt, deviceId: appDevice?.id ?? null },
+      { id: sessionId, accountId: found.id, tokenHash: hashSessionToken(token), createdAt: now, expiresAt },
       { ...auditMeta, sessionId, method: 'external' },
     );
     await this.throttle.clear(loginKey);
@@ -474,29 +467,8 @@ export class AuthService implements OnModuleInit {
         sessionId,
         sessionExpiresAt: expiresAt,
         channel: 'web',
-        ...(appDevice === null ? {} : { deviceId: appDevice.id, deviceStatus: appDevice.status }),
-      },
+        },
     };
-  }
-
-  /**
-   * AUTH-2: registers (or finds) the installation of an app login. Null for the site and for app versions that send no device
-   * (legacy sessions stay valid: PROPOSED, reported to the owner). A revoked device is refused with `device_revoked`: the app wipes.
-   */
-  private async registerAppDevice(
-    found: { id: string; role: CurrentUser['role'] },
-    meta: RequestMeta,
-  ): Promise<{ id: string; status: 'pending' | 'approved' | 'revoked' } | null> {
-    if (meta.client !== 'app' || this.devices === undefined) return null;
-    // The channel is declared by the client, but only the app channel opens a session for a seller (AUTH-6): an app login without a device fails closed.
-    if (meta.device === undefined) {
-      // TEMPORARY (owner, 2026-11-26): staging/Sandbox only, until the new APK is published. Fails closed everywhere else and when the flag is removed.
-      if (process.env.SF_ALLOW_LEGACY_APP_LOGIN === 'true' && process.env.SF_ERP_ENVIRONMENT === 'sandbox') return null;
-      throw new AppError('device_required');
-    }
-    const device = await this.devices.registerAtLogin({ accountId: found.id, role: found.role }, meta.device);
-    if (device.status === 'revoked') throw new AppError('device_revoked');
-    return device;
   }
 
   /** `app` login of a role without the mobile channel: audited, then the actionable `app_not_permitted`. No session is opened. */
@@ -533,7 +505,6 @@ export class AuthService implements OnModuleInit {
       row.revokedAt === null &&
       row.expiresAt.getTime() > this.clock().getTime() &&
       row.status === 'active' &&
-      row.deviceStatus !== 'revoked' &&
       this.roleMayHoldSession(row.role, row.external)
     );
   }
@@ -577,7 +548,6 @@ export class AuthService implements OnModuleInit {
         sessionId: row.sessionId,
         sessionExpiresAt: expiresAt,
         channel,
-        ...(row.deviceId === null ? {} : { deviceId: row.deviceId, deviceStatus: row.deviceStatus }),
       },
     };
   }
@@ -673,7 +643,7 @@ export class AuthService implements OnModuleInit {
    * mode or role, so the dev mode behaves the same as `local`.
    */
   private async openAuditedSession(
-    values: { id: string; accountId: string; tokenHash: string; createdAt: Date; expiresAt: Date; deviceId?: string | null },
+    values: { id: string; accountId: string; tokenHash: string; createdAt: Date; expiresAt: Date },
     detail: Parameters<AuditService['record']>[0]['detail'],
   ): Promise<void> {
     try {

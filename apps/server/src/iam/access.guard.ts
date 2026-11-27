@@ -8,7 +8,6 @@ import type { AuthConfig } from './auth-config.js';
 import { readCookie, serializeClearedSessionCookie, serializeSessionCookie } from './cookies.js';
 import { checkCsrf } from './csrf.js';
 import { setCurrentUser } from './current-user.js';
-import { assertDeviceMayCall } from './device-gate.js';
 import { AUTH_CONFIG } from './iam-tokens.js';
 import { PolicyService } from './policy.service.js';
 import { CLOCK, type Clock } from '../platform/tokens.js';
@@ -70,9 +69,6 @@ export class AccessGuard implements CanActivate {
       if (token !== undefined) void reply.header('set-cookie', serializeClearedSessionCookie({ secure: this.config.secureCookies }));
       throw new AppError('unauthenticated');
     }
-
-    // AUTH-1: the device behind the session is checked on every request (revoked = wipe signal; pending = no business data).
-    assertDeviceMayCall(resolved.user, route.operationId);
 
     const decision = this.policy.authorizeRoute(resolved.user, route.operationId);
     if (!decision.allowed) {

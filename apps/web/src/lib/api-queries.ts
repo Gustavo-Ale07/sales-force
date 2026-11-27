@@ -27,8 +27,6 @@ export const queryKeys = {
   forceSettings: ["force-config"] as const,
   sellerDiscountRules: ["seller-discount-rules"] as const,
   myDiscountLimits: ["my-discount-limits"] as const,
-  devices: ["devices"] as const,
-  deviceSettings: ["device-settings"] as const,
   approvals: (page: number, pageSize: number) => ["approvals", "list", page, pageSize] as const,
   approvalsAll: ["approvals"] as const,
   releaseQueue: (params: ReleaseQueueParams) => ["release-queue", "list", params] as const,
@@ -112,21 +110,6 @@ export function myDiscountLimitsQueryOptions(api: ApiClient) {
     queryKey: queryKeys.myDiscountLimits,
     queryFn: () => callApi(() => api.GET("/discount-limits/mine")),
     staleTime: 5 * 60_000,
-  });
-}
-
-/** W-36: devices the caller may manage (admin: all; manager: the team). The server scopes the list. */
-export function devicesQueryOptions(api: ApiClient) {
-  return queryOptions({
-    queryKey: queryKeys.devices,
-    queryFn: () => callApi(() => api.GET("/devices", { params: { query: {} } })),
-  });
-}
-
-export function deviceSettingsQueryOptions(api: ApiClient) {
-  return queryOptions({
-    queryKey: queryKeys.deviceSettings,
-    queryFn: () => callApi(() => api.GET("/device-settings")),
   });
 }
 

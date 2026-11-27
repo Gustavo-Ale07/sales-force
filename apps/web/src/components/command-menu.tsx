@@ -4,7 +4,7 @@ import { Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { canUseCommercial } from "@salesforce/contracts";
 import { approvalsEnabled, useDiscountAuthorityMode } from "../lib/discount-authority";
-import { navItemsFor } from "./nav-items";
+import { menuItemsFor, navItemsFor } from "./nav-items";
 
 const isApple = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform);
 
@@ -31,7 +31,7 @@ export function CommandMenu({ role }: { role: string | undefined }) {
 
   const items = useMemo<CommandItem[]>(
     () => [
-      ...navItemsFor(role, approvals).map(({ to, label, icon: Icon }) => ({
+      ...[...navItemsFor(role, approvals), ...menuItemsFor(role, approvals)].map(({ to, label, icon: Icon }) => ({
         id: `page-${to}`,
         group: "Páginas",
         label,
@@ -67,11 +67,11 @@ export function CommandMenu({ role }: { role: string | undefined }) {
         aria-label={`Ir para… (${chip})`}
         aria-keyshortcuts="Control+K Meta+K"
         aria-haspopup="dialog"
-        className="flex size-11 shrink-0 items-center justify-center rounded-full text-sidebar-fg transition-colors duration-[var(--sf-dur-fast)] hover:bg-sidebar-hover hover:text-sidebar-fg-active xl:h-11 xl:w-[220px] xl:justify-start xl:gap-2 xl:rounded-[12px] xl:bg-white/10 xl:px-3 xl:hover:bg-white/15"
+        className="flex size-11 shrink-0 items-center justify-center rounded-full text-sidebar-fg transition-colors duration-[var(--sf-dur-fast)] hover:bg-sidebar-hover hover:text-sidebar-fg-active 2xl:h-11 2xl:w-[220px] 2xl:justify-start 2xl:gap-2 2xl:rounded-[12px] 2xl:bg-white/10 2xl:px-3 2xl:hover:bg-white/15"
       >
         <Search size={18} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
-        <span className="hidden flex-1 text-left text-sm xl:block">Ir para…</span>
-        <kbd className="hidden rounded-sm bg-white/15 px-1.5 py-0.5 font-sans text-2xs font-semibold text-sidebar-fg-active xl:block">{chip}</kbd>
+        <span className="hidden flex-1 whitespace-nowrap text-left text-sm 2xl:block">Ir para…</span>
+        <kbd className="hidden rounded-sm bg-white/15 px-1.5 py-0.5 font-sans text-2xs font-semibold text-sidebar-fg-active 2xl:block">{chip}</kbd>
       </button>
       <CommandPalette
         open={open}

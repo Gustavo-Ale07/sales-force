@@ -24,14 +24,16 @@ describe("parseMaxDays", () => {
 });
 
 describe("Parâmetros", () => {
-  it("sends a seller back to the start page", async () => {
-    const { router, calls } = renderApp("/parametros", { handlers: shellData, role: "seller" });
-    await waitFor(() => expect(router.state.location.pathname).toBe("/"));
+  it("shows access denied to a seller, without asking for the parameters", async () => {
+    const { calls } = renderApp("/parametros", { handlers: shellData, role: "seller" });
+    expect(await screen.findByText("Acesso negado")).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
     expect(callsTo(calls, "GET", "/force-config")).toHaveLength(0);
+    expect(callsTo(calls, "GET", "/goals")).toHaveLength(0);
   });
 
   it("loads, validates and saves both fields", async () => {
-    const { user, calls } = renderApp("/parametros", {
+    const { user, calls } = renderApp("/parametros?aba=geral", {
       handlers: {
         ...shellData,
         "GET /force-config": { body: settings },

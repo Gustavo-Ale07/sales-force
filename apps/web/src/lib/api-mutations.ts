@@ -41,22 +41,6 @@ export function verifyOrderDelivery(api: ApiClient, id: string) {
   return callApi(() => api.POST("/orders/{id}/verify-delivery", { params: { path: { id } } }));
 }
 
-/** W-36: approve or revoke a device. The server re-checks the scope (admin: all; manager: the team). */
-export function decideDevice(api: ApiClient, id: string, decision: "approve" | "revoke") {
-  return callApi(() =>
-    decision === "approve"
-      ? api.POST("/devices/{id}/approve", { params: { path: { id } } })
-      : api.POST("/devices/{id}/revoke", { params: { path: { id } } }),
-  );
-}
-
-export type UpdateDeviceSettingsBody = { maxActiveDevices: number };
-
-/** Offline limit and approved devices per account (admin only). */
-export function updateDeviceSettings(api: ApiClient, body: UpdateDeviceSettingsBody) {
-  return callApi(() => api.PUT("/device-settings", { body }));
-}
-
 export type UpdateDiscountLimitsBody = ApiSchema<"UpdateDiscountLimitsRequest">;
 
 /** W-39: replaces the three discount limits (admin only; the server re-checks the role). */

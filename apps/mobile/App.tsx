@@ -1,34 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StatusBar, StyleSheet, Text, View } from "react-native";
 import * as SplashScreen from "expo-splash-screen";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { apiConfig } from "./src/config";
 import { deleteDatabaseFile } from "@salesforce/mobile-db/expo";
 import { APP_DATABASE_NAME, openAppDatabase } from "./src/db/app-database";
-import { createSecureInstallIdStore } from "./src/device/secure-install-id";
 import { DeviceNoticeScreen } from "./src/ui/device-notice-screen";
 import { createAppDependencies, type AppDependencies } from "./src/dependencies";
 import { S7DiagnosticsScreen } from "./src/dev/s7-diagnostics-screen";
+import { addServer, loadStoredServer } from "./src/server/add-server";
+import { createSecureServerCodeStore } from "./src/server/secure-server-code-store";
+import { onServerCodeRejected, setServerConnection, type ServerConnection } from "./src/server/server-connection";
 import { colors, spacing } from "./src/theme";
+import { AddServerScreen } from "./src/ui/add-server-screen";
 import { SplashView } from "./src/ui/brand";
 import { Shell } from "./src/ui/shell";
 import { UpdateGate } from "./src/ui/update-gate";
 import { installUpdate, startupUpdateCheck } from "./src/update/device-update";
-
-function ConfigError({ reason }: { reason: "missing" | "invalid" | "insecure" }) {
-  return (
-    <View style={styles.configError}>
-      <Text style={styles.configTitle}>Servidor não configurado</Text>
-      <Text style={styles.configText}>
-        {reason === "missing"
-          ? "Defina EXPO_PUBLIC_API_URL com o endereço do servidor (por exemplo http://192.168.0.10:3000) e gere o aplicativo novamente."
-          : reason === "insecure"
-            ? "Este aplicativo só aceita um servidor com https://. Defina EXPO_PUBLIC_API_URL com um endereço https:// e gere o aplicativo novamente."
-            : "EXPO_PUBLIC_API_URL deve ser apenas o endereço do servidor (http:// ou https://, sem caminho)."}
-      </Text>
-    </View>
-  );
-}
 
 // The native splash stays up until the first React frame is laid out, then hands over to the (identical) JS splash: no blank flash.
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -36,7 +24,7 @@ void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 /** Spike S7 (V-09): build-time flag, never set in a real build. Inlined by Expo at bundle time. */
 const S7_DIAGNOSTICS = process.env.EXPO_PUBLIC_S7_DIAGNOSTICS === "1";
 
-type Boot = { readonly phase: "opening" } | { readonly phase: "ready"; readonly dependencies: AppDependencies } | { readonly phase: "failed" } | { readonly phase: "key_lost" };
+type Boot = { readonly phase: "add_server" } | { readonly phase: "opening" } | { readonly phase: "ready"; readonly dependencies: AppDependencies } | { readonly phase: "failed" } | { readonly phase: "key_lost" };
 
 /** The secure-store key is gone while the database file remains: the data cannot be opened (`KeyMissingError`, packages/mobile-db). */
 function isKeyLost(error: unknown): boolean {
@@ -69,13 +57,62 @@ function DatabaseError() {
   );
 }
 
-/** The encrypted database opens before anything else and never falls back to plaintext or to online-only (MOB-6). */
-function useBoot(): { readonly boot: Boot; readonly resetLocalData: () => Promise<void> } {
+const codeStore = createSecureServerCodeStore();
+
+/** Development only: the build-time address stands in for a server code (no key; the server guard is then off or the code is added by hand). */
+function developmentFallback(): ServerConnection | null {
+  if (!__DEV__ || !apiConfig.ok) return null;
+  return { baseUrl: apiConfig.baseUrl, origin: new URL(apiConfig.baseUrl).origin, key: "" };
+}
+
+/**
+ * The server code decides where the app talks to (the address inside it) and is sent on every request. Without a stored code the
+ * only screen is "Adicionar servidor". The encrypted database opens only after that, before anything else, and never falls back to
+ * plaintext or to online-only (MOB-6). A guard 401 (code rotated) forgets the code and the local session and returns to the start.
+ */
+function useBoot(): { readonly boot: Boot; readonly resetLocalData: () => Promise<void>; readonly submitCode: (code: string) => Promise<boolean> } {
   const [boot, setBoot] = useState<Boot>({ phase: "opening" });
   const [attempt, setAttempt] = useState(0);
+  const [connection, setConnection] = useState<ServerConnection | null | "loading">("loading");
+  const noFallback = useRef(false);
+  const current = useRef<Boot>(boot);
   useEffect(() => {
-    if (!apiConfig.ok || S7_DIAGNOSTICS) return undefined;
-    const baseUrl = apiConfig.baseUrl;
+    current.current = boot;
+  }, [boot]);
+
+  useEffect(() => {
+    let active = true;
+    void loadStoredServer(codeStore).then((stored) => {
+      if (!active) return;
+      const next = stored.kind === "ready" ? stored.connection : noFallback.current ? null : developmentFallback();
+      setConnection(next);
+      if (next === null) setBoot({ phase: "add_server" });
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(
+    () =>
+      onServerCodeRejected(() => {
+        noFallback.current = true;
+        const running = current.current;
+        void (async () => {
+          if (running.phase === "ready") await running.dependencies.offline?.session.forget().catch(() => undefined);
+          await codeStore.clear().catch(() => undefined);
+          setServerConnection(null);
+          setConnection(null);
+          setBoot({ phase: "add_server" });
+        })();
+      }),
+    [],
+  );
+
+  useEffect(() => {
+    if (connection === "loading" || connection === null || S7_DIAGNOSTICS) return undefined;
+    setServerConnection(connection.key === "" ? null : connection);
+    const baseUrl = connection.baseUrl;
     let active = true;
     openAppDatabase()
       .then((opened) => {
@@ -87,18 +124,25 @@ function useBoot(): { readonly boot: Boot; readonly resetLocalData: () => Promis
     return () => {
       active = false;
     };
-  }, [attempt]);
+  }, [attempt, connection]);
+
+  const submitCode = async (raw: string): Promise<boolean> => {
+    const accepted = await addServer(raw, { store: codeStore });
+    if (accepted === null) return false;
+    setBoot({ phase: "opening" });
+    setConnection(accepted);
+    return true;
+  };
   const resetLocalData = async () => {
     await deleteDatabaseFile(APP_DATABASE_NAME);
-    await createSecureInstallIdStore().reset().catch(() => undefined);
     setBoot({ phase: "opening" });
-    setAttempt((current) => current + 1);
+    setAttempt((value) => value + 1);
   };
-  return { boot, resetLocalData };
+  return { boot, resetLocalData, submitCode };
 }
 
 export default function App() {
-  const { boot, resetLocalData } = useBoot();
+  const { boot, resetLocalData, submitCode } = useBoot();
   // Screens own their insets (header, bottom navigation, login); only the plain status screens need the wrapper.
   const safe = (content: React.ReactNode) => (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
@@ -111,8 +155,8 @@ export default function App() {
       <View style={styles.root} onLayout={() => void SplashScreen.hideAsync().catch(() => undefined)}>
         {S7_DIAGNOSTICS ? (
           safe(<S7DiagnosticsScreen />)
-        ) : !apiConfig.ok ? (
-          safe(<ConfigError reason={apiConfig.reason} />)
+        ) : boot.phase === "add_server" ? (
+          <AddServerScreen onSubmit={submitCode} />
         ) : boot.phase === "ready" ? (
           <UpdateGate {...(startupUpdateCheck ? { check: startupUpdateCheck } : {})} install={installUpdate}>
             <Shell dependencies={boot.dependencies} />

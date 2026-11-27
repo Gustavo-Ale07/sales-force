@@ -51,16 +51,17 @@ function positivationText(figure: Positivation | null): string {
 }
 
 /** Metas e positivação do mês (W-23, RF-GOL-1/2): meta e realizado vêm do espelho do ERP; o vendedor vê o próprio resultado, gerente e administrador veem a equipe. */
-export function MetasPage() {
+export function MetasPage({ embedded = false }: { embedded?: boolean } = {}) {
   const api = useApi();
   const query = useQuery(goalsQueryOptions(api));
 
   return (
     <>
-      <PageHeader
-        title="Metas"
-        description={query.data ? <span>{monthLabel(query.data.month)}</span> : undefined}
-      />
+      {embedded ? (
+        query.data ? <p className="m-0 text-sm text-fg-muted">{monthLabel(query.data.month)}</p> : null
+      ) : (
+        <PageHeader title="Metas" description={query.data ? <span>{monthLabel(query.data.month)}</span> : undefined} />
+      )}
       {query.isPending ? (
         <LoadingPanel title="Carregando metas…" lines={5} />
       ) : query.isError ? (

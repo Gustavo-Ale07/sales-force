@@ -253,18 +253,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/devices/me": {
+    "/app-config": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Status of the calling device (M-02, M-19)
-         * @description null device = the session was not opened from a registered app installation. A pending device may call this route and logout only; a revoked one gets 401 device_revoked (the app wipes its local database).
-         */
-        get: operations["getMyDevice"];
+        /** App parameters of the Force configuration (days without sync, default price table) */
+        get: operations["getAppConfig"];
         put?: never;
         post?: never;
         delete?: never;
@@ -273,88 +270,19 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/devices/me/sync": {
+    "/server-code/check": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** The app reports a completed synchronization (informational) */
-        post: operations["reportDeviceSync"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/devices": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Mobile devices (W-36): admin all, manager the team only */
-        get: operations["listDevices"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/devices/{id}/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
         /**
-         * Approve a pending device (audited)
-         * @description 404 outside the caller scope; 409 conflict when the account already has the maximum number of approved devices or the device is not pending.
+         * Validates the X-Server-Code header (204 when accepted)
+         * @description Public of any session, protected by the global server-code guard: a missing or wrong code is a bodiless 401 before this handler runs.
          */
-        post: operations["approveDevice"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/devices/{id}/revoke": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
+        get: operations["checkServerCode"];
         put?: never;
-        /** Revoke a device (audited): its next request tells the app to wipe */
-        post: operations["revokeDevice"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/device-settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Offline limit and devices per account (Configuracoes, admin only) */
-        get: operations["getDeviceSettings"];
-        /** Replace the device settings (admin only, audited) */
-        put: operations["updateDeviceSettings"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1601,7 +1529,7 @@ export interface components {
             authMode: components["schemas"]["AuthMode"];
             account: components["schemas"]["Account"];
             expiresAt: components["schemas"]["IsoTimestamp"];
-            device?: components["schemas"]["SessionDevice"];
+            appConfig?: components["schemas"]["SessionAppConfig"];
         };
         Carrier: {
             code: number;
@@ -2007,42 +1935,6 @@ export interface components {
         };
         DecimalString: string;
         /** @enum {string} */
-        DevicePlatform: "android" | "ios";
-        DeviceRegistration: {
-            installId: string;
-            label: string;
-            platform: components["schemas"]["DevicePlatform"];
-        };
-        DeviceSettings: {
-            offlineMaxDays: number;
-            maxActiveDevices: number;
-        };
-        /** @enum {string} */
-        DeviceStatus: "pending" | "approved" | "revoked";
-        DeviceSyncReport: {
-            syncedAt: components["schemas"]["IsoTimestamp"];
-        };
-        DeviceView: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            accountId: string;
-            accountName: string;
-            accountUsername: string;
-            label: string;
-            platform: components["schemas"]["DevicePlatform"];
-            status: components["schemas"]["DeviceStatus"];
-            createdAt: components["schemas"]["IsoTimestamp"];
-            lastSeenAt: components["schemas"]["IsoTimestamp"];
-            lastSyncAt: components["schemas"]["IsoTimestamp"] | null;
-            decidedAt: components["schemas"]["IsoTimestamp"] | null;
-            decidedByName: string | null;
-            canManage: boolean;
-        };
-        DevicesResponse: {
-            items: components["schemas"]["DeviceView"][];
-        };
-        /** @enum {string} */
         DiscountAuthorityMode: "erp" | "force";
         /** @enum {string} */
         DiscountAuthorityStatus: "not_evaluated" | "within_authority" | "needs_manager" | "needs_director" | "blocked";
@@ -2071,7 +1963,7 @@ export interface components {
             details?: components["schemas"]["ErrorDetails"];
         };
         /** @enum {string} */
-        ErrorCode: "validation_failed" | "customer_refused" | "unauthenticated" | "invalid_credentials" | "access_not_configured" | "app_not_permitted" | "device_pending" | "device_required" | "device_revoked" | "forbidden" | "not_found" | "conflict" | "version_conflict" | "idempotency_conflict" | "order_not_editable" | "installation_not_enabled" | "erp_submission_disabled" | "discount_blocked" | "approval_not_pending" | "dataset_mismatch" | "no_seller_scope" | "customer_without_seller" | "customer_ineligible" | "link_reconciliation_required" | "rate_limited" | "service_unavailable" | "internal_error";
+        ErrorCode: "validation_failed" | "customer_refused" | "unauthenticated" | "invalid_credentials" | "access_not_configured" | "app_not_permitted" | "forbidden" | "not_found" | "conflict" | "version_conflict" | "idempotency_conflict" | "order_not_editable" | "installation_not_enabled" | "erp_submission_disabled" | "discount_blocked" | "approval_not_pending" | "dataset_mismatch" | "no_seller_scope" | "customer_without_seller" | "customer_ineligible" | "link_reconciliation_required" | "rate_limited" | "service_unavailable" | "internal_error";
         ErrorDetails: {
             issues?: components["schemas"]["ErrorIssue"][];
         } & {
@@ -2254,7 +2146,6 @@ export interface components {
             password: string;
             /** @enum {string} */
             client?: "web" | "app";
-            device?: components["schemas"]["DeviceRegistration"];
         };
         MarkNotificationsReadRequest: {
             ids?: string[];
@@ -2296,9 +2187,6 @@ export interface components {
         MobilityFilterMode: "disabled" | "enforced";
         /** @enum {string} */
         MobilityFilterValidation: "pending_validation" | "validated";
-        MyDeviceResponse: {
-            device: components["schemas"]["SessionDevice"] | null;
-        };
         MyDiscountLimitsResponse: {
             sellerCode: number | null;
             rules: components["schemas"]["SellerDiscountRule"][];
@@ -2958,10 +2846,7 @@ export interface components {
         SellersResponse: {
             items: components["schemas"]["Seller"][];
         };
-        SessionDevice: {
-            /** Format: uuid */
-            id: string;
-            status: components["schemas"]["DeviceStatus"];
+        SessionAppConfig: {
             offlineMaxDays: number;
             defaultPriceTableCode?: number;
         };
@@ -3112,9 +2997,6 @@ export interface components {
             reasonCode: components["schemas"]["CustomerReasonCode"] | null;
             reasonMessage: string | null;
             updatedAt: components["schemas"]["IsoTimestamp"];
-        };
-        UpdateDeviceSettingsRequest: {
-            maxActiveDevices: number;
         };
         UpdateDiscountLimitsRequest: {
             expectedRevision: string;
@@ -4004,7 +3886,7 @@ export interface operations {
             };
         };
     };
-    getMyDevice: {
+    getAppConfig: {
         parameters: {
             query?: never;
             header?: never;
@@ -4013,13 +3895,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Aparelho da sessão */
+            /** @description Parâmetros do app */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MyDeviceResponse"];
+                    "application/json": components["schemas"]["SessionAppConfig"];
                 };
             };
             /** @description Não autenticado */
@@ -4031,308 +3913,32 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
-    reportDeviceSync: {
+    checkServerCode: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeviceSyncReport"];
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description Registrado */
+            /** @description Código aceito */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Requisição inválida (validation_failed) */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Não autenticado */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Sem permissão para este recurso */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    listDevices: {
-        parameters: {
-            query?: {
-                status?: components["schemas"]["DeviceStatus"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Aparelhos */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DevicesResponse"];
-                };
-            };
-            /** @description Requisição inválida (validation_failed) */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Não autenticado */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Sem permissão para este recurso */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    approveDevice: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Aparelho aprovado */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeviceView"];
-                };
-            };
-            /** @description Não autenticado */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Sem permissão para este recurso */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Conflito de estado */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    revokeDevice: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Aparelho revogado */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeviceView"];
-                };
-            };
-            /** @description Não autenticado */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Sem permissão para este recurso */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Conflito de estado */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    getDeviceSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Configuração de aparelhos */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeviceSettings"];
-                };
-            };
-            /** @description Não autenticado */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Sem permissão para este recurso */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    updateDeviceSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateDeviceSettingsRequest"];
-            };
-        };
-        responses: {
-            /** @description Configuração salva */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeviceSettings"];
-                };
-            };
-            /** @description Requisição inválida (validation_failed) */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Não autenticado */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description Sem permissão para este recurso */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
             };
         };
     };

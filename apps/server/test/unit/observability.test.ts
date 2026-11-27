@@ -47,7 +47,8 @@ describe('logger', () => {
         token: leaked,
         secret: leaked,
         authorization: `Bearer ${leaked}`,
-        headers: { cookie: leaked, 'x-token': leaked, authorization: leaked, 'set-cookie': leaked },
+        headers: { cookie: leaked, 'x-token': leaked, authorization: leaked, 'set-cookie': leaked, 'x-server-code': leaked },
+        serverCode: leaked,
         nested: { deeper: { config: { clientSecret: leaked, 'x-token': leaked } } },
         body: { newPassword: leaked, currentPassword: leaked },
         connectionString: `postgres://u:${leaked}@h/db`,
@@ -56,7 +57,7 @@ describe('logger', () => {
     );
     const [line] = capture.lines();
     expect(JSON.stringify(line)).not.toContain(leaked);
-    expect(line).toMatchObject({ password: REDACTED_PLACEHOLDER, headers: { 'x-token': REDACTED_PLACEHOLDER } });
+    expect(line).toMatchObject({ password: REDACTED_PLACEHOLDER, serverCode: REDACTED_PLACEHOLDER, headers: { 'x-token': REDACTED_PLACEHOLDER, 'x-server-code': REDACTED_PLACEHOLDER } });
   });
 
   it('redacts every case and separator spelling of credential keys', () => {

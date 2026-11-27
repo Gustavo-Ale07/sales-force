@@ -166,7 +166,7 @@ Each entry: status · decision or proposal · rationale · consequences · valid
   - **Android:** prefer normal Google Play distribution with in-app authentication if Managed Google Play would require managing personal devices; check unlisted/private distribution options.
   - **iOS:** Unlisted App Store distribution preferred; Apple Business Manager custom app as fallback; TestFlight only for beta testing.
   - Start the organizational Apple and Google developer accounts early.
-- **Deferred (U-08, batch 2):** the demo environment and demo account for Apple/Google store review stay UNDECIDED until the Phase 1 gate; they depend on device approval (AUTH-2) and on which API environment the store build targets.
+- **Deferred (U-08, batch 2):** the demo environment and demo account for Apple/Google store review stay UNDECIDED until the Phase 1 gate; they depended on device approval (AUTH-2, superseded by SRV-1 on 2026-11-27) and on which API environment the store build targets.
 - **Supersedes:** spec §14 Managed Google Play / "ABM or TestFlight" (R46, R47).
 
 ### 3.2 APPROVED — Round 2 (infrastructure), batch 2
@@ -334,7 +334,7 @@ Each entry: status · decision or proposal · rationale · consequences · valid
 - **Would supersede:** spec §12.1 mobile JWT access token.
 
 #### AUTH-2 · Device approval
-- **Status:** PROPOSED (Round 4)
+- **Status:** SUPERSEDED 2026-11-27 by SRV-1 (§3.23, APPROVED). Original status: PROPOSED (Round 4). Text kept as history.
 - **Proposal:** a representative's new mobile device must be approved (admin or the representative's manager) before any business data is sent; at most 1 active device per representative (configurable); internal users' devices auto-approved with admin notification.
 - **Rationale:** compensates the accepted absence of 2FA (R13).
 
@@ -897,6 +897,19 @@ Source: the project owner (Gustavo), prompt of 2026-10-30 part 2 (`.claude/work/
 - **Positivação:** cliente da carteira com pedido de TOP com `AD_MOBILIDADE = 'S'` que tem nota filha faturada no mês, via `TGFVAR` (migração 0062).
 - **Editar pedido (desfecho da validação de 27/11):** nenhum caminho altera pedido existente no Sankhya com segurança (`docs/sankhya-spike.md` §9.67). Só existe Duplicar. Editar pedido segue PENDENTE até o Sankhya fornecer serviço de recálculo de totais/financeiro; alternativa validada: excluir pedido não confirmado (F-51) e recriar (novo NUNOTA). Nenhuma escrita de alteração é implementada.
 
+### 3.23 APPROVED — Owner ruling: Código de servidor substitui a aprovação de aparelho (2026-11-27)
+
+#### SRV-1 · Código de servidor (um por ambiente)
+- **Status:** APPROVED 2026-11-27 (decisão explícita do dono).
+- **Substitui:** a aprovação de aparelho (AUTH-2 e o §4.1 do `security-model.md`), por completo e em todos os ambientes. AUTH-2 fica SUBSTITUÍDO (histórico mantido). As tabelas `device` e `push_device` ficam sem uso (expand-only, nada é apagado). Remove o bypass `SF_ALLOW_LEGACY_APP_LOGIN`.
+- **Formato:** um código por ambiente, 256 bits aleatórios (`k`), no formato `sf1.` + base64url(`{"a": URL da API, "k": segredo}`). O mesmo APK serve staging e produção conforme o código digitado. Variável de ambiente `SF_PUBLIC_API_URL`.
+- **Cliente:** na primeira abertura (app, ou site em navegador novo) só aparece "Adicionar servidor". O app guarda o código no armazenamento seguro; o site, no `localStorage`. Todo request leva `X-Server-Code: <k>`, inclusive login e renovação de sessão.
+- **Servidor:** guarda só o SHA-256 de `k`; comparação em tempo constante; resposta 401 sem corpo; 20 falhas em 10 min por IP => 429; sem código ativo => falha fechada. Exceções: sondas `getHealth`/`getReady` e `GET /server-code/check`.
+- **REGRA:** o código NUNCA passa por tela (nem administrador gera ou vê). Só por comando via SSH: `deploy/scripts/server-code.sh <staging|production> show-hash` (confirma que há código ativo; mostra só o prefixo do hash e a data) e `rotate` (gera novo, derruba todas as sessões, audita `config.server_code_rotated` com actor `cli`, imprime o código uma única vez). Produção só recebe código quando o dono pedir.
+- **Riscos aceitos pelo dono:** o código é portador (quem o tem fala com a API; ainda precisa de usuário e senha); 2FA continua não existindo (P-11); `EventSource` e imagens do site usam fetch/blob ou fallback por polling; o app antigo (0.2.0) recebe 401 e precisa do APK 0.3.0 novo.
+- **A confirmar com o dono (navegação, mesma sessão):** o vendedor deixa de ter caminho de menu para `/metas` (só por URL). Registrado como decisão de navegação do dono, ainda a confirmar; não altera autorização (P-21).
+- **Não muda:** P-11 (sem 2FA), P-20, P-21, PAR-1 (vale para site e app). Itens do §3.x e documentos que citam aprovação de aparelho como controle compensatório passam a citar SRV-1.
+
 ## 4. Status of the specification's decisions (spec §4)
 
 The spec is a draft. Its decisions are binding only where an APPROVED entry above covers them.
@@ -918,7 +931,7 @@ The spec is a draft. Its decisions are binding only where an APPROVED entry abov
 | D13 | PROPOSED | wa.me link + manual registration (Phase 2); official API Phase 4. The ban on unofficial WhatsApp integration is APPROVED (P-13) |
 | D14 | APPROVED | P-12 |
 | D15 | APPROVED in part | Modular monolith (P-04), strict TypeScript (P-06), NestJS (STACK-3), Drizzle (DATA-2), pnpm + Turborepo (STACK-1), Zod contracts direction (STACK-4) and the Vite + React SPA replacing Next.js (STACK-5) APPROVED; BullMQ/Redis and MinIO superseded (STACK-6, STACK-7); sync engine and remaining stack choices PROPOSED (SYNC-1) |
-| D16 | APPROVED | P-11; compensating controls (AUTH-1, AUTH-2) PROPOSED |
+| D16 | APPROVED | P-11; compensating controls: AUTH-1 PROPOSED; AUTH-2 superseded by SRV-1 (APPROVED 2026-11-27) |
 | D17 | APPROVED | P-09; detection details UNDECIDED (R33) |
 | D18 | APPROVED | P-14 |
 | D19 | AMENDED | OPS-1 (VPS/VM compute kept; managed PostgreSQL with PITR preferred; isolated staging) |

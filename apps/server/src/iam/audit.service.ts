@@ -122,14 +122,8 @@ export const AUDIT_ACTIONS = {
   importCompleted: 'import.completed',
   /** RF-DSH-6: a spreadsheet export was produced (resource, format and row count; never the content). */
   dataExported: 'data.exported',
-  /** AUTH-2: an app installation registered for an account (device id, platform, initial status; never the install id). */
-  deviceRegistered: 'device.registered',
-  /** AUTH-2: an administrator or manager approved a device (device and owner ids). */
-  deviceApproved: 'device.approved',
-  /** AUTH-2: an administrator or manager revoked a device; the app wipes on its next request (device and owner ids, previous status). */
-  deviceRevoked: 'device.revoked',
-  /** RF-IAM-8: the offline limit or the devices-per-account limit changed (new and previous values). */
-  deviceSettingsChanged: 'device.settings_changed',
+  /** Owner ruling 2026-11-27: the server code was rotated (every session revoked; count only, never the code). `actorAccountId` is null for the operator script. */
+  serverCodeRotated: 'config.server_code_rotated',
 } as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
 

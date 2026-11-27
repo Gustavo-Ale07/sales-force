@@ -63,6 +63,7 @@ const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
   device: { api: ['SELECT', 'INSERT', 'UPDATE'], worker: [] },
   device_setting: { api: ['SELECT', 'INSERT', 'UPDATE'], worker: [] },
   force_config: { api: SIU, worker: [] },
+  server_code: { api: ['SELECT', 'INSERT', 'DELETE'], worker: [] },
   seller_discount_rule: { api: SIUD, worker: [] },
   activity_task: { api: ['SELECT', 'INSERT', 'UPDATE'], worker: ['SELECT', 'UPDATE'] },
   notification: { api: ['SELECT', 'UPDATE'], worker: ['SELECT', 'INSERT', 'UPDATE'] },

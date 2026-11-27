@@ -70,6 +70,7 @@
 --   device                                S I U       -              device.repository: registration, approval, last-seen/last-sync
 --   device_setting                        S I U       -              device.repository: installation-wide device settings (offline max days)
 --   force_config                          S I U       -              force-config.repository: installation parameters (days without sync, default price table), single row
+--   server_code                           S I D       -              server-code.repository: SHA-256 of the X-Server-Code secret, one active row (rotation = delete + insert in one transaction)
 --   seller_discount_rule                  S I U D     -              force-config.repository: per-seller discount ceilings edited on the site
 --   activity_task                         S I U       S U            tasks.repository (api); the notification sweep reads due tasks and flags the reminder sent (worker S U)
 --   notification                          S U         S I U          api marks as read; the notification sweep creates and pushes them (worker S I U)
@@ -273,6 +274,7 @@ BEGIN
       ('device',                          'force_api',    'SELECT, INSERT, UPDATE'),
       ('device_setting',                  'force_api',    'SELECT, INSERT, UPDATE'),
       ('force_config',                    'force_api',    'SELECT, INSERT, UPDATE'),
+      ('server_code',                     'force_api',    'SELECT, INSERT, DELETE'),
       ('seller_discount_rule',            'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('activity_task',                   'force_api',    'SELECT, INSERT, UPDATE'),
       ('notification',                    'force_api',    'SELECT, UPDATE'),

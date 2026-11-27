@@ -122,6 +122,10 @@ Decisoes do dono consideradas (nao reabertas): Sankhya e a fonte de verdade; apr
 9. W-33/34/35/37: usuarios, equipes, perfis, auditoria (telas admin).
 10. INT-1: consulta de CNPJ com cache; ACC-2/W-08: abas Analise e Engajamento.
 
+## Atualizacao 2026-11-27 (SRV-1): aparelhos
+
+IAM-7, IAM-8, M-02 e o item 1 da lista de prioridade (aparelhos) passam a **FEITO** por substituicao: a aprovacao de aparelho foi removida e entrou o codigo de servidor (SRV-1, `decisions.md` §3.23). Os itens "1 aparelho por conta" e "Aparelho: wipe de revogacao" abaixo ficam obsoletos. Bloqueio de 7 dias (offline maximo) segue como esta.
+
 ## Atualizacao 2026-11-27 (staging em 838c400e, Sandbox)
 
 Esta secao prevalece sobre as tabelas acima onde divergirem (elas sao da auditoria de 26/11).
@@ -135,7 +139,7 @@ Esta secao prevalece sobre as tabelas acima onde divergirem (elas sao da auditor
 **PENDENTE**
 - Editar pedido: so Duplicar; falta servico de recalculo de totais/financeiro do Sankhya (`sankhya-spike.md` §9.67).
 - Busca global no app.
-- APK 0.3.0 publicado em /downloads: arquivos prontos; falta permissao de escrita em `/opt/force-staging/downloads` (pasta de root). Depois, remover a flag `SF_ALLOW_LEGACY_APP_LOGIN`.
+- APK 0.3.0 publicado em /downloads: arquivos prontos; falta permissao de escrita em `/opt/force-staging/downloads` (pasta de root). (A flag `SF_ALLOW_LEGACY_APP_LOGIN` foi removida por SRV-1.)
 - Tela `/configuracoes` ainda diz "Edite no Sankhya": contradiz CFG-9; trocar o texto.
 - Revalidar a tabela de preco no worker na entrega (LOW).
 - Quantidade realizada das metas retorna null.

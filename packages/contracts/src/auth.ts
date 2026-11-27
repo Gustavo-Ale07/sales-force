@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DeviceRegistrationSchema, SessionDeviceSchema } from './devices.js';
+import { SessionAppConfigSchema } from './app-config.js';
 import { IsoTimestampSchema, UuidSchema, codeInt, named } from './primitives.js';
 
 export const AccountRoleSchema = named('AccountRole', z.enum(['admin', 'manager', 'seller', 'technical', 'operations']));
@@ -29,8 +29,6 @@ export const LoginRequestSchema = named(
      * (so the refusal reveals nothing to someone without the password). The site is never affected.
      */
     client: z.enum(['web', 'app']).optional(),
-    /** The app's installation (AUTH-2): registers or finds the device. Ignored for the site. Absent = an app version that predates the registry. */
-    device: DeviceRegistrationSchema.optional(),
   }),
 );
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
@@ -103,8 +101,8 @@ export const AuthenticatedSessionSchema = named(
     authMode: AuthModeSchema,
     account: AccountSchema,
     expiresAt: IsoTimestampSchema,
-    /** The device behind the session (app logins only; additive). */
-    device: SessionDeviceSchema.optional(),
+    /** App parameters of the Force configuration (additive). */
+    appConfig: SessionAppConfigSchema.optional(),
   }),
 );
 

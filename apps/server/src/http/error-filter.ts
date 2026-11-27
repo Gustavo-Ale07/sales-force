@@ -2,6 +2,7 @@ import { ApiErrorSchema, ERROR_HTTP_STATUS, type ApiError, type ErrorCode } from
 import { Catch, HttpException, type ArgumentsHost, type ExceptionFilter } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { AppError, DEFAULT_ERROR_MESSAGES, type AppErrorDetails } from './app-error.js';
+import { ServerCodeRejection } from './server-code-rejection.js';
 
 /** Maps an HTTP status raised by the framework (routing, body parsing) to the closest error code. */
 export function codeForFrameworkStatus(status: number): ErrorCode {
@@ -82,6 +83,12 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const http = host.switchToHttp();
     const request = http.getRequest<FastifyRequest>();
     const reply = http.getResponse<FastifyReply>();
+
+    // Server code guard: status only, no body and no detail (the caller cannot tell a missing code from a wrong one).
+    if (error instanceof ServerCodeRejection) {
+      if (!reply.sent) void reply.status(error.status).send();
+      return;
+    }
 
     const resolved = resolveError(error);
     const status = ERROR_HTTP_STATUS[resolved.code];

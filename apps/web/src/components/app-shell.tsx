@@ -1,4 +1,4 @@
-import { Drawer, DrawerContent, DrawerTrigger, IconButton, type BreadcrumbItem } from "@salesforce/ui";
+import { cn, Drawer, DrawerContent, DrawerTrigger, IconButton, Tooltip, type BreadcrumbItem } from "@salesforce/ui";
 import { canSeeIntegration } from "@salesforce/contracts";
 import { Link, useMatches, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Menu } from "lucide-react";
@@ -23,7 +23,7 @@ import { UserMenu } from "./user-menu";
 // The router sets `data-status="active"` on the current link; styling off that attribute (instead of swapping
 // class strings) keeps the active colours from losing a Tailwind specificity/merge fight with the base ones.
 const topLink =
-  "flex h-11 items-center gap-2 rounded-[12px] px-[18px] text-[15px] font-semibold text-sidebar-fg no-underline transition-[background-color,color] duration-[var(--sf-dur-fast)] ease-spring hover:bg-sidebar-hover hover:text-sidebar-fg-active data-[status=active]:bg-white data-[status=active]:text-[var(--sf-sidebar-bg)] data-[status=active]:shadow-[0_2px_8px_rgba(0,0,0,0.18)]";
+  "flex h-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[12px] px-3 text-[15px] font-semibold text-sidebar-fg no-underline transition-[background-color,color] duration-[var(--sf-dur-fast)] ease-spring hover:bg-sidebar-hover hover:text-sidebar-fg-active data-[status=active]:bg-white data-[status=active]:text-[var(--sf-sidebar-bg)] data-[status=active]:shadow-[0_2px_8px_rgba(0,0,0,0.18)]";
 
 /** Counter on the "Aguardando liberação" item; the number is also spoken ("N pedidos aguardando"). */
 function QueueBadge({ total }: { total: number }) {
@@ -38,21 +38,33 @@ function QueueBadge({ total }: { total: number }) {
   );
 }
 
+/**
+ * Width (of the bar area left for the links) from which the labels fit, by number of items. Below it the links are
+ * icon-only with a tooltip, so nothing ever wraps or overlaps at any window width. Literal strings so Tailwind sees them.
+ */
+function labelClasses(count: number): { label: string; icon: string } {
+  if (count <= 3) return { label: "@min-[320px]:not-sr-only", icon: "@min-[320px]:hidden" };
+  if (count <= 6) return { label: "@min-[700px]:not-sr-only", icon: "@min-[700px]:hidden" };
+  if (count === 7) return { label: "@min-[860px]:not-sr-only", icon: "@min-[860px]:hidden" };
+  if (count === 8) return { label: "@min-[980px]:not-sr-only", icon: "@min-[980px]:hidden" };
+  return { label: "@min-[1120px]:not-sr-only", icon: "@min-[1120px]:hidden" };
+}
+
 function TopNav({ role }: { role: string | undefined }) {
   const approvals = approvalsEnabled(useDiscountAuthorityMode(role));
   const queue = useReleaseQueueAccess(role);
+  const items = navItemsFor(role, approvals, queue.visible);
+  const classes = labelClasses(items.length);
   return (
-    // lg, not md: at md (768px) the integration pill still shows its full label (see integration-pill.tsx's
-    // max-md: collapse), and up to 5 nav items plus that label don't both fit in the 768-1023px range -- the
-    // drawer nav below covers that gap instead of the two colliding.
-    <nav aria-label="Principal" className="hidden items-center gap-1.5 lg:flex">
-      {navItemsFor(role, approvals, queue.visible).map(({ to, label, icon: Icon }) => (
-        <Link key={to} to={to} activeOptions={{ exact: to === "/" }} className={topLink}>
-          {/* Icons only from xl: below it the labels alone already use the available width. */}
-          <Icon size={18} strokeWidth={1.75} aria-hidden="true" className="hidden shrink-0 xl:block" />
-          {label}
-          {to === "/aguardando-liberacao" ? <QueueBadge total={queue.total} /> : null}
-        </Link>
+    <nav aria-label="Principal" className="hidden items-center gap-1 lg:flex">
+      {items.map(({ to, label, icon: Icon }) => (
+        <Tooltip key={to} content={label} side="bottom">
+          <Link to={to} activeOptions={{ exact: to === "/" }} className={topLink}>
+            <Icon size={18} strokeWidth={1.75} aria-hidden="true" className={cn("shrink-0", classes.icon)} />
+            <span className={cn("sr-only", classes.label)}>{label}</span>
+            {to === "/aguardando-liberacao" ? <QueueBadge total={queue.total} /> : null}
+          </Link>
+        </Tooltip>
       ))}
     </nav>
   );
@@ -181,10 +193,10 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
           </DrawerContent>
         </Drawer>
         <Brand tone="dark" size="md" preferMark className="shrink-0" />
-        <div className="flex min-w-0 flex-1 items-center lg:pl-4">
+        <div className="@container flex min-w-0 flex-1 items-center lg:pl-4">
           <TopNav role={user?.role} />
         </div>
-        <div className="flex shrink-0 items-center gap-0.5 md:gap-2">
+        <div className="flex shrink-0 items-center gap-1 md:gap-2">
           {user && canSeeIntegration(user.role) ? <ConnectedIntegrationPill /> : null}
           {user ? <SyncIndicator role={user.role} /> : null}
           <CommandMenu role={user?.role} />

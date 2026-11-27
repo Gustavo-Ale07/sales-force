@@ -13,6 +13,7 @@ import {
   type RouterHistory,
 } from "@tanstack/react-router";
 import { AppShell } from "./components/app-shell";
+import { ServerCodeGate } from "./components/server-code-gate";
 import { ForceModeGate } from "./components/force-mode-gate";
 import { NotFound, RouteError, RoutePending } from "./components/route-states";
 import { useAppServices } from "./lib/app-context";
@@ -22,6 +23,7 @@ import { isOperationsRole, OPERATIONS_HOME, OPERATIONS_PROFILE } from "./lib/ope
 import { safeRedirect } from "./lib/safe-redirect";
 import { asInt } from "./lib/search-params";
 import { LoginPage } from "./routes/login";
+import { parseParametersSearch } from "./routes/parameters";
 
 export interface RouterContext {
   queryClient: QueryClient;
@@ -29,7 +31,7 @@ export interface RouterContext {
 }
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({
-  component: Outlet,
+  component: ServerCodeGate,
   // Fallback outside the shell (e.g. a missing parent segment); normal unknown URLs hit `notFoundRoute` below.
   notFoundComponent: () => (
     <main id="conteudo" className="mx-auto max-w-lg p-6">
@@ -213,7 +215,6 @@ const settingsRoute = createRoute({
 });
 
 const LazyDiscountLimitsPage = lazyRouteComponent(() => import("./routes/discount-limits"), "DiscountLimitsPage");
-const LazyDevicesPage = lazyRouteComponent(() => import("./routes/devices"), "DevicesPage");
 const LazyTarefasPage = lazyRouteComponent(() => import("./routes/tarefas"), "TarefasPage");
 const LazyMetasPage = lazyRouteComponent(() => import("./routes/metas"), "MetasPage");
 const LazyNotificacoesPage = lazyRouteComponent(() => import("./routes/notificacoes"), "NotificacoesPage");
@@ -235,39 +236,31 @@ const discountLimitsRoute = createRoute({
   ),
 });
 
+/** Parâmetros (admin and manager): tabs Metas, Descontos and Geral. A seller who opens it sees "Acesso negado"; the server enforces every call. */
 const forceSettingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/parametros",
   staticData: { crumb: "Parâmetros" },
-  // Admin and manager; the server (getForceSettings) is what enforces it.
-  beforeLoad: async ({ context }) => {
-    const user = await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
-    if (!user || (user.role !== "admin" && user.role !== "manager")) throw redirect({ to: "/" });
-  },
-  component: lazyRouteComponent(() => import("./routes/force-settings"), "ForceSettingsPage"),
+  validateSearch: (search: Record<string, unknown>) => parseParametersSearch(search),
+  component: lazyRouteComponent(() => import("./routes/parameters"), "ParametersPage"),
 });
 
+/** Former screens, now tabs of Parâmetros. */
 const sellerDiscountRulesRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/descontos-representante",
-  staticData: { crumb: "Descontos por representante" },
-  beforeLoad: async ({ context }) => {
-    const user = await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
-    if (!user || (user.role !== "admin" && user.role !== "manager")) throw redirect({ to: "/" });
+  beforeLoad: () => {
+    throw redirect({ to: "/parametros", search: { aba: "descontos" } });
   },
-  component: lazyRouteComponent(() => import("./routes/seller-discount-rules"), "SellerDiscountRulesPage"),
 });
 
+/** Device approval no longer exists (server code replaced it). */
 const devicesRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/aparelhos",
-  staticData: { crumb: "Aparelhos" },
-  // Admin and manager; the server (listDevices) is what enforces it and scopes the list.
-  beforeLoad: async ({ context }) => {
-    const user = await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
-    if (!user || (user.role !== "admin" && user.role !== "manager")) throw redirect({ to: "/" });
+  beforeLoad: () => {
+    throw redirect({ to: "/" });
   },
-  component: LazyDevicesPage,
 });
 
 const tarefasRoute = createRoute({
@@ -281,6 +274,11 @@ const metasRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/metas",
   staticData: { crumb: "Metas" },
+  // Manager and administrator work on the goals inside Parâmetros; a seller keeps the page with their own result.
+  beforeLoad: async ({ context }) => {
+    const user = await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
+    if (user && (user.role === "admin" || user.role === "manager")) throw redirect({ to: "/parametros", search: { aba: "metas" } });
+  },
   component: LazyMetasPage,
 });
 

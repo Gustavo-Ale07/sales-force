@@ -2,7 +2,6 @@ import {
   account,
   activityTask,
   customerRegistration,
-  device,
   notification,
   pushDevice,
   salesOrder,
@@ -198,8 +197,6 @@ export class NotificationSweepService {
             eq(pushDevice.accountId, item.accountId),
             isNull(pushDevice.disabledAt),
             eq(account.status, 'active'),
-            // Only an account that still has an approved device is notified (a revoked or pending installation gets nothing).
-            sql`exists (select 1 from ${device} where ${device.accountId} = ${pushDevice.accountId} and ${device.status} = 'approved')`,
           ),
         );
       if (devices.length === 0) {

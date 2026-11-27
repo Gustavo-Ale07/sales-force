@@ -52,7 +52,7 @@ function FailureAlert({ failure }: { failure: LoginFailure }) {
     case "channel_forbidden":
       return (
         <Alert tone="warning" title="Este perfil acessa somente pelo aplicativo móvel.">
-          Instale o aplicativo no aparelho aprovado.
+          Instale o aplicativo no celular.
         </Alert>
       );
     case "unavailable":

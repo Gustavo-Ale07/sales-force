@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DATASET_ID_SLUG_PATTERN, type DatasetIdentity } from '@salesforce/contracts';
+import { DATASET_ID_SLUG_PATTERN, ServerCodeApiUrlSchema, type DatasetIdentity } from '@salesforce/contracts';
 import { passwordHashFields, passwordHashProblems } from './auth-env.js';
 import { externalLoginFields, externalLoginProblems, externalVerifierOf, type ExternalVerifierSettings } from './external-login-env.js';
 import {
@@ -93,6 +93,8 @@ export const ApiEnvSchema = z.object({
   SESSION_ABSOLUTE_TIMEOUT_HOURS: integerField({ min: 1, max: 720 }, 168),
   /** Comma-separated origins allowed to send state-changing requests (CSRF Origin check). */
   ALLOWED_ORIGINS: z.string().optional(),
+  /** Public origin of this API as clients reach it (e.g. https://api.example.com, no path): goes into the server code as `a`. Unset = rotation answers 503. */
+  SF_PUBLIC_API_URL: z.string().trim().optional(),
   ...passwordHashFields,
   ...externalLoginFields,
 
@@ -246,6 +248,9 @@ export function parseApiEnv(source: EnvSource): ParsedApiEnv {
       if (parsed.SF_DATASET_ID === undefined) {
         problems.push('SF_DATASET_ID: is required when NODE_ENV=production (the installation must declare its dataset identity).');
       }
+    }
+    if (parsed.SF_PUBLIC_API_URL !== undefined && parsed.SF_PUBLIC_API_URL !== '' && !ServerCodeApiUrlSchema.safeParse(parsed.SF_PUBLIC_API_URL).success) {
+      problems.push('SF_PUBLIC_API_URL: must be an http(s) origin such as https://api.example.com (no trailing slash, query or fragment).');
     }
     problems.push(...origins.problems,...passwordHashProblems(parsed), ...externalLoginProblems(parsed), ...mediaDirProblems(parsed.PRODUCT_MEDIA_DIR), ...mediaDirProblems(parsed.ACCOUNT_PHOTO_DIR).map((p) => p.replace('PRODUCT_MEDIA_DIR', 'ACCOUNT_PHOTO_DIR')));
     return problems;

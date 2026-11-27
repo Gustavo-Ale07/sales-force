@@ -1,13 +1,13 @@
-import type { LoginRequest, SessionDevice } from "@salesforce/contracts";
+import type { LoginRequest } from "@salesforce/contracts";
 import type { ApiSchema } from "@salesforce/contracts/client";
 
 export type Account = ApiSchema<"Account">;
 
 export type LoginResult =
-  | { readonly ok: true; readonly account: Account; readonly device?: SessionDevice }
+  | { readonly ok: true; readonly account: Account }
   | {
       readonly ok: false;
-      readonly reason: "device_revoked" | "invalid_credentials" | "access_not_configured" | "app_not_permitted" | "rate_limited" | "unavailable";
+      readonly reason: "invalid_credentials" | "access_not_configured" | "app_not_permitted" | "rate_limited" | "unavailable";
       readonly retryAfterSeconds?: number;
     };
 

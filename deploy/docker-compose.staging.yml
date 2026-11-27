@@ -135,6 +135,8 @@ services:
       ALLOWED_ORIGINS: https://${STAGING_DOMAIN:?STAGING_DOMAIN is required}
       # Exactly one trusted hop: the edge (Caddy) proxies /api/* straight to the API and sets the client address.
       TRUST_PROXY: "1"
+      # Public origin of the API (no /api/v1): goes inside the server code. Optional; rotate and the bootstrap script need it.
+      SF_PUBLIC_API_URL: ${SF_PUBLIC_API_URL:-}
       # Dataset identity of THIS staging installation (non-secret; never the production identity).
       SF_ERP_ENVIRONMENT: ${SF_ERP_ENVIRONMENT:?SF_ERP_ENVIRONMENT is required in production mode}
       SF_DATASET_ID: ${SF_DATASET_ID:?SF_DATASET_ID is required in production mode}

@@ -1,6 +1,5 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
 import {
-  Alert,
   Button,
   Card,
   CardBody,
@@ -21,7 +20,6 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { QueryError } from "../components/query-error";
-import { DeviceSettingsCard } from "./devices";
 import { configurationQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 
@@ -170,10 +168,7 @@ export function SettingsPage() {
           <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} title="Não foi possível carregar as configurações" />
         </Card>
       ) : (
-        <>
-          <SettingsView data={query.data} />
-          <DeviceSettingsCard />
-        </>
+        <SettingsView data={query.data} />
       )}
     </>
   );

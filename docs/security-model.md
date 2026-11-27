@@ -38,9 +38,9 @@ This model is therefore largely a **proposal**: most sections describe the contr
 
 | Threat | Primary controls |
 |---|---|
-| External representative copying the portfolio to a competitor | Mobile-only (AUTH-3), device approval (AUTH-2), no general export capability (P-20), scope (AUTH-4), audit |
+| External representative copying the portfolio to a competitor | Mobile-only (AUTH-3), server code (SRV-1; device approval AUTH-2 superseded), no general export capability (P-20), scope (AUTH-4), audit |
 | Lost or stolen phone | Encrypted local database (MOB-2), revocation + wipe, max offline period |
-| Password reuse / credential stuffing | Strong password policy, breached-password check, lockout, rate limiting, device approval |
+| Password reuse / credential stuffing | Strong password policy, breached-password check, lockout, rate limiting, server code (SRV-1) |
 | User seeing another portfolio | Central policy (AUTH-4), scope-aware sync (SYNC-3), matrix tests |
 | Sensitive field leak through API or sync | Explicit response mapping, field rules in §6 |
 | Staging touching production | Environment separation (P-15, SNK-3) |
@@ -89,7 +89,7 @@ Defined in `project-spec.md` §2: Admin, Diretoria, Gerente, Vendedor interno, R
   - session active and not expired;
   - user active and not locked;
   - session version current;
-  - for mobile: device approved and not revoked;
+  - valid server code (`X-Server-Code`, SRV-1, §4.1) before anything else, except the health/ready probes and `GET /server-code/check`;
   - channel allowed for the user's profile (§4.2).
 - The session version increments on password change or reset, user deactivation and administrative session revocation, which invalidates existing sessions immediately.
 - Permission changes take effect on the next request because authorization is evaluated per request from current data.
@@ -98,16 +98,23 @@ Defined in `project-spec.md` §2: Admin, Diretoria, Gerente, Vendedor interno, R
 
 ## 4. Devices and channels
 
-### 4.1 Mobile devices (AUTH-2, RF-IAM-7, RF-IAM-8)
+### 4.1 Código de servidor (SRV-1, APPROVED 2026-11-27; substitui a aprovação de aparelho AUTH-2)
 
-- A device registers on its first mobile login. Status: `pending` → `approved` → `revoked`.
-- **External representatives:** a new device requires approval by an admin or the representative's manager. At most 1 active device (configurable).
-- **Internal users:** devices are auto-approved; the admin is notified.
-- A `pending` device receives only authentication and device-status responses — no business data.
-- **Revocation:** sessions are invalidated immediately. On its next contact the app deletes its local database and cached files.
-- **Max offline period:** 7 days (configurable). After it, the app blocks use until it synchronizes.
-- Phase split: device identity and status are part of the Phase 0 session model; approval screens, wipe and offline lock are Phase 1.
-- **[UNDECIDED R16]** clock manipulation against the offline lock.
+A aprovação de aparelho foi removida por completo em todos os ambientes (tabelas `device`/`push_device` sem uso, expand-only). O controle passa a ser o código de servidor, um por ambiente.
+
+- **Formato:** 256 bits aleatórios (`k`); o código é `sf1.` + base64url(`{a: URL da API, k: segredo}`). O mesmo APK serve staging e produção conforme o código digitado.
+- **Cliente:** primeira abertura (app ou site em navegador novo) só mostra "Adicionar servidor". App: armazenamento seguro; site: `localStorage`. Todo request leva `X-Server-Code: k`, inclusive login e renovação de sessão.
+- **Servidor:** guarda só o SHA-256 de `k`; comparação em tempo constante; 401 sem corpo; 20 falhas em 10 min por IP => 429; sem código ativo => falha fechada. Exceções: sondas `getHealth`/`getReady` e `GET /server-code/check`.
+- **Ameaças que cobre:** API aberta a qualquer cliente que descubra a URL; varredura e credential stuffing contra o login (exige o código antes de qualquer tentativa); APK ou site de um ambiente falando com outro.
+- **O que NÃO protege:** o código é portador (quem o tem fala com a API; ainda precisa de usuário e senha); não identifica pessoa nem aparelho; não substitui 2FA (P-11, risco aceito); não limita cópia de dados por quem já tem conta e escopo (escopo, P-20 e auditoria seguem valendo). `EventSource` e imagens do site usam fetch/blob ou fallback por polling, porque não enviam cabeçalho.
+- **Geração e visualização:** o código NUNCA passa por tela (nem administrador gera ou vê). Só por SSH: `deploy/scripts/server-code.sh <staging|production> show-hash` (prefixo do hash e data) e `rotate`.
+- **Rotação:** `rotate` gera novo código, derruba todas as sessões e imprime o código uma única vez; clientes com o código antigo recebem 401 e precisam adicionar o novo servidor. Rotacionar também é a resposta a vazamento.
+- **Auditoria:** `config.server_code_rotated` (actor `cli`); falhas e 429 em log sem o valor enviado. O código nunca vai para git, docs, logs ou chat além da entrega ao dono.
+- **Vazamento:** rotacionar imediatamente (efeito em todos os clientes), revisar auditoria de login do período e, se houver suspeita de uso, sessões e contas afetadas (bloqueio, troca de senha). Produção só recebe código quando o dono pedir.
+- **Revogação e offline:** sessões revogadas invalidam o acesso de imediato; no próximo contato o app apaga o banco local e os arquivos em cache. Período máximo offline: 7 dias (configurável); depois o app bloqueia o uso até sincronizar.
+- **App antigo (0.2.0):** recebe 401 e precisa do APK 0.3.0. O bypass `SF_ALLOW_LEGACY_APP_LOGIN` foi removido.
+- **[UNDECIDED R16]** manipulação do relógio contra o bloqueio offline.
+- Histórico: a regra anterior (registro `pending` → `approved` → `revoked`, aprovação por admin/gerente, 1 aparelho ativo) era PROPOSED (AUTH-2) e está SUBSTITUÍDA.
 
 ### 4.2 Channel restriction (AUTH-3)
 
@@ -268,10 +275,10 @@ Claude Code and agents never perform or prepare such an inspection without the r
 
 | Risk | Accepted because | Compensating controls |
 |---|---|---|
-| No 2FA (P-11) | Owner decision; user friction | Strong passwords, breached-password check, lockout, rate limits, device approval, audit |
+| No 2FA (P-11) | Owner decision; user friction | Strong passwords, breached-password check, lockout, rate limits, server code (SRV-1), audit |
 | Remote wipe is best effort | A device that never reconnects cannot be wiped | Encryption at rest, max offline period, immediate session revocation |
 | Screen photos and manual copying | Not technically preventable | Scope limits exposure; audit; contractual controls outside the system |
-| App login block for technical/operations accounts (`POST /auth/login` with `client: 'app'` answers 403 `app_not_permitted`) is bypassable by omitting `client` | It is a product rule, not a security boundary; those profiles hold no more data than their web access | Authorization stays server-side per request; a real guarantee needs the channel bound to the session and device approval (a new decision); audit `auth.login.app_not_permitted` |
+| App login block for technical/operations accounts (`POST /auth/login` with `client: 'app'` answers 403 `app_not_permitted`) is bypassable by omitting `client` | It is a product rule, not a security boundary; those profiles hold no more data than their web access | Authorization stays server-side per request; a real guarantee needs the channel bound to the session (a new decision; device approval no longer exists, SRV-1); audit `auth.login.app_not_permitted` |
 
 The no-2FA decision is revisited after any unauthorized-access incident or a change in user profile (spec §12.1).
 
@@ -283,7 +290,7 @@ Recorded events (spec §12.4, extended):
 - login success, login failure, lockout, unlock;
 - password reset requested/completed;
 - user created, changed, deactivated; profile and permission changes;
-- device registered, approved, revoked; session revoked;
+- `config.server_code_rotated` (actor `cli`, SRV-1); session revoked; (device registered/approved/revoked: obsolete, SRV-1);
 - order and customer approvals/rejections (Phase 1);
 - discount-limit changes (Phase 1);
 - imports and exports;
@@ -308,7 +315,7 @@ Each entry records actor, action, entity, identifier, summarized before/after, I
 Changes in these areas require a `security-reviewer` pass before completion:
 
 - authentication, sessions, password handling, lockout;
-- devices, revocation, wipe, offline lock;
+- server code (SRV-1), revocation, wipe, offline lock;
 - the authorization policy, scope rules, new permissions;
 - sync endpoints or bundle/scope-event logic;
 - any response that could include cost, margin, exports or cross-portfolio data;

@@ -240,7 +240,8 @@ describe("Integração é só do administrador", () => {
   it("shows the menu entry, the pill and the page to an administrator", async () => {
     renderApp("/integracao", { handlers: shellData, role: "admin" });
     expect(await screen.findByText("Sincronização por entidade", { selector: "caption" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Integração" })).toBeInTheDocument();
+    // The administrator reaches it from the avatar menu, not from the top bar.
+    expect(screen.queryByRole("link", { name: "Integração" })).not.toBeInTheDocument();
     expect(await screen.findByText("Integração: não configurada")).toBeInTheDocument();
   });
 });

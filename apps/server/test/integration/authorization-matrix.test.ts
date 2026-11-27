@@ -26,14 +26,8 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   getProfilePhoto: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
   getConfiguration: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'allow', operations: 'deny' },
   // W-39 discount limits (DISC-3): admin only; manager, seller and technical are denied.
-  // AUTH-2 / W-36: an app device reads its own status; approval and revocation are admin and manager (the team scope is proved in devices.test.ts).
-  getMyDevice: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
-  reportDeviceSync: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
-  listDevices: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
-  approveDevice: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
-  revokeDevice: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
-  getDeviceSettings: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny', operations: 'deny' },
-  updateDeviceSettings: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny', operations: 'deny' },
+  // Server code (owner ruling 2026-11-27): app parameters for every profile that signs in.
+  getAppConfig: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
   getDiscountLimits: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny', operations: 'deny' },
   updateDiscountLimits: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny', operations: 'deny' },
   getForceSettings: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },

@@ -7,8 +7,6 @@ import type { CustomerListItem } from "../data/ports";
 import { lineFromProduct, type EditorLine } from "../data/order-draft";
 import { ProductImageProvider } from "../images/product-image-context";
 import { evaluateOfflineAccess } from "../offline/session";
-import { onDeviceRevoked } from "../device/revocation";
-import { useDeviceGate } from "../device/use-device-gate";
 import { DeviceNoticeScreen } from "./device-notice-screen";
 import { useSyncStatus } from "../offline/use-sync";
 import { colors, HEADER_HEIGHT, spacing } from "../theme";
@@ -85,8 +83,8 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const insets = useInsets();
   const keyboardVisible = useKeyboardVisible();
   const [session, setSession] = useState<Session>({ phase: "checking" });
-  /** M-18 / M-19: a full-screen notice shown instead of the login form until the seller acts. */
-  const [notice, setNotice] = useState<"locked" | "revoked" | null>(null);
+  /** M-18: a full-screen notice shown instead of the login form until the seller acts. */
+  const [notice, setNotice] = useState<"locked" | null>(null);
   const [tab, setTab] = useState<MainTab>("home");
   const [visited, setVisited] = useState<ReadonlySet<MainTab>>(() => new Set<MainTab>(["home"]));
   const [salesView, setSalesView] = useState<SalesView>("orders");
@@ -117,9 +115,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   // One set of services per signed-in account: cache-backed reads, local drafts and the sync manager.
   const photoService = dependencies.profilePhoto;
   const photoUri = useProfilePhotoUri(photoService?.store, account?.id ?? "", account?.photoVersion, connectivityState !== "offline");
-  // AUTH-2: a device still pending approval holds no business data and does not synchronize.
-  const deviceGate = useDeviceGate({ device: dependencies.device, session: offline?.session, active: session.phase === "authenticated" && !session.offlineEntry });
-  const services = useMemo(() => (account !== null && offline !== undefined && deviceGate !== "pending" ? offline.forAccount(account) : null), [account, offline, deviceGate]);
+  const services = useMemo(() => (account !== null && offline !== undefined ? offline.forAccount(account) : null), [account, offline]);
   const repositories = services?.repositories ?? dependencies.repositories;
   const icmsOptions = useIcmsOptions();
   const customerWriter = dependencies.customerWrite;
@@ -135,30 +131,6 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   // RT-1: opening the orders list or one order's detail asks the server to re-read the open orders (cap and cooldown in the engine).
   const ordersAreaKey = tab === "sales" && salesView === "orders" ? `orders:${saleDetailOpen}` : undefined;
   const syncStatus = useSyncStatus(services?.sync ?? null, connectivityState, session.phase === "authenticated" && session.freshLogin === true, services?.openEvents, ordersAreaKey);
-  // The server's record of this device's last synchronization (shown on the site's Aparelhos screen).
-  const lastSyncedAt = syncStatus.lastSyncedAt;
-  useEffect(() => {
-    if (lastSyncedAt === null || dependencies.device === undefined) return;
-    void dependencies.device.reportSync(new Date(lastSyncedAt)).catch(() => undefined);
-  }, [lastSyncedAt, dependencies.device]);
-  // M-19: the server told this installation it was revoked. Wipe everything local (database, cached images, photo, identity) and say so.
-  useEffect(
-    () =>
-      onDeviceRevoked(() => {
-        void (async () => {
-          await offline?.wipeAll().catch(() => undefined);
-          await services?.productImages?.purge().catch(() => undefined);
-          await photoService?.store.purge().catch(() => undefined);
-          await dependencies.device?.resetIdentity().catch(() => undefined);
-          setQuarantineOpen(false);
-          setCustomerDetail(null);
-          setCustomerForm(null);
-          setNotice("revoked");
-          setSession({ phase: "anonymous" });
-        })();
-      }),
-    [offline, services, photoService, dependencies.device],
-  );
   const clearResume = useCallback(() => setResumeLocalId(null), []);
   const clearStart = useCallback(() => setStartRequest(null), []);
   // Retained (quarantined) orders: re-counted whenever the sync counters move or the seller changes them.
@@ -398,8 +370,6 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   if (session.phase === "checking") return <SplashView />;
 
   if (session.phase === "anonymous" && notice !== null) return <DeviceNoticeScreen kind={notice} onAction={() => setNotice(null)} />;
-
-  if (session.phase === "authenticated" && deviceGate === "pending") return <DeviceNoticeScreen kind="pending" onAction={() => void signOut()} />;
 
   if (session.phase === "anonymous") {
     return (
@@ -715,7 +685,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
               account={session.account}
               {...syncView}
               {...(photoService === undefined ? {} : { photo: { service: photoService, uri: photoUri, onChanged: photoChanged } })}
-              {...(updateAvailable ? { onCheckUpdate: installUpdate } : {})}
+              {...(updateAvailable() ? { onCheckUpdate: installUpdate } : {})}
               onSignOut={() => void signOut()}
               {...(account !== null && offline !== undefined ? { loadUnsent: () => offline.unsentWork(account.id) } : {})}
             />

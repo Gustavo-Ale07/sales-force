@@ -2,9 +2,11 @@ import type { ObjectStore } from '../../src/media/object-store.js';
 import { Controller, Get, Module, Post, type Type } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { SESSION_COOKIE_NAME, routes, type DatasetIdentity, type RouteDefinition } from '@salesforce/contracts';
-import { account } from '@salesforce/db';
+import { SERVER_CODE_HEADER } from '@salesforce/contracts';
+import { account, serverCode } from '@salesforce/db';
 import type { LightMyRequestResponse } from 'fastify';
 import { sql } from 'drizzle-orm';
+import { hashServerCodeSecret } from '../../src/iam/server-code.service.js';
 import { SessionRepository } from '../../src/iam/session.repository.js';
 import { generateSessionToken, hashSessionToken } from '../../src/iam/session-crypto.js';
 import { uuidv7 } from '../../src/platform/ids.js';
@@ -72,6 +74,30 @@ export function stubControllerFor(routeList: readonly RouteDefinition[]): Type<u
   return StubController;
 }
 
+/** Secret of the server code every test app is seeded with; the app's `inject` sends it unless the request names the header itself. */
+export const TEST_SERVER_CODE_SECRET = 'k'.repeat(43);
+/** Header value that a request sets to be sent WITHOUT a usable code (the harness leaves a present header alone). */
+export const NO_SERVER_CODE = '';
+
+/** Seeds the active server code of the test database (idempotent: the table holds a single row). */
+export async function seedServerCode(database: MigratedDatabase, now: Date = new Date()): Promise<void> {
+  await database.handle.db
+    .insert(serverCode)
+    .values({ id: uuidv7(now.getTime()), codeHash: hashServerCodeSecret(TEST_SERVER_CODE_SECRET), createdAt: now, rotatedByAccountId: null })
+    .onConflictDoNothing();
+}
+
+/**
+ * Central place where the server code reaches the tests: every `app.inject` carries the seeded code unless the request already sets
+ * `x-server-code` (any value, including `NO_SERVER_CODE`). The health probes ignore it, as in production.
+ */
+export function sendServerCodeByDefault(app: NestFastifyApplication): void {
+  app.getHttpAdapter().getInstance().addHook('onRequest', (request, _reply, done) => {
+    if (request.headers[SERVER_CODE_HEADER] === undefined) request.headers[SERVER_CODE_HEADER] = TEST_SERVER_CODE_SECRET;
+    done();
+  });
+}
+
 export interface AuthApp {
   readonly app: NestFastifyApplication;
   readonly database: MigratedDatabase;
@@ -117,6 +143,7 @@ export async function startAuthApp(
 ): Promise<AuthApp> {
   const database = options.database ?? (await createMigratedDatabase(postgres));
   if (options.database === undefined) closers.push(() => database.handle.close());
+  await seedServerCode(database);
   const clock = new TestClock();
   const capture = captureLogs();
   const logger = createLogger({ level: 'info', service: 'api', destination: capture.stream });
@@ -158,6 +185,7 @@ export async function startAuthApp(
     ...(options.trustProxy === undefined ? {} : { trustProxy: options.trustProxy }),
     ...(rootModule === undefined ? {} : { rootModule }),
   });
+  sendServerCodeByDefault(app);
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   closers.push(() => app.close());
@@ -170,13 +198,13 @@ export function login(
   { app }: Pick<AuthApp, 'app'>,
   username: string,
   password: string,
-  extra: { headers?: Record<string, string>; remoteAddress?: string; client?: 'web' | 'app'; device?: { installId: string; label: string; platform: 'android' | 'ios' } } = {},
+  extra: { headers?: Record<string, string>; remoteAddress?: string; client?: 'web' | 'app' } = {},
 ): Promise<LightMyRequestResponse> {
   return app.inject({
     method: 'POST',
     url: '/api/v1/auth/login',
     headers: { ...JSON_HEADERS, ...extra.headers },
-    payload: JSON.stringify({ username, password, ...(extra.client === undefined ? {} : { client: extra.client }), ...(extra.device === undefined ? {} : { device: extra.device }) }),
+    payload: JSON.stringify({ username, password, ...(extra.client === undefined ? {} : { client: extra.client }), }),
     ...(extra.remoteAddress === undefined ? {} : { remoteAddress: extra.remoteAddress }),
   });
 }

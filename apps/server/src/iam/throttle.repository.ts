@@ -113,6 +113,15 @@ export class ThrottleRepository {
     return removed.length > 0;
   }
 
+  /** Forgets every key starting with `prefix` (the server-code failure counters, on rotation). */
+  async clearPrefix(prefix: string): Promise<number> {
+    const removed = await this.db
+      .delete(authThrottle)
+      .where(sql`left(${authThrottle.key}, ${prefix.length}) = ${prefix}`)
+      .returning({ key: authThrottle.key });
+    return removed.length;
+  }
+
   /** Drops rows idle for `THROTTLE_RETENTION_MS` that are not currently locked. Keeps the table bounded. */
   async purgeStale(now: Date): Promise<number> {
     const cutoff = new Date(now.getTime() - THROTTLE_RETENTION_MS);

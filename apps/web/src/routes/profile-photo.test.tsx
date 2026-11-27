@@ -1,7 +1,9 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { account } from "../test/fixtures";
+import { SERVER_CODE_HEADER } from "../lib/server-code";
 import { apiError, callsTo, renderApp, type Handlers } from "../test/harness";
+import { TEST_SERVER_KEY } from "../test/server-code";
 
 vi.setConfig({ testTimeout: 20_000 });
 
@@ -26,6 +28,8 @@ const pick = async (picked: File) => {
   fireEvent.change(input, { target: { files: [picked] } });
 };
 
+let photoFetch: ReturnType<typeof vi.fn>;
+
 class FakeImage {
   onload: (() => void) | null = null;
   onerror: (() => void) | null = null;
@@ -42,6 +46,9 @@ beforeEach(() => {
   vi.stubGlobal("Image", FakeImage);
   URL.createObjectURL = vi.fn(() => "blob:preview");
   URL.revokeObjectURL = vi.fn();
+  // The photo is an <img>, which cannot send the server-code header: it is downloaded through the guarded client.
+  photoFetch = vi.fn(async () => new Response(new Blob(["x"], { type: "image/jpeg" }), { status: 200 }));
+  vi.stubGlobal("fetch", photoFetch);
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ fillRect: vi.fn(), drawImage: vi.fn(), fillStyle: "" } as unknown as CanvasRenderingContext2D);
   vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/jpeg;base64,QUJD");
 });
@@ -61,7 +68,19 @@ describe("Foto de perfil", () => {
     open({}, "v1");
     const photos = await screen.findAllByTestId("avatar-photo");
     expect(photos.length).toBeGreaterThanOrEqual(2);
-    for (const photo of photos) expect(photo).toHaveAttribute("src", "/api/v1/me/photo?v=v1");
+    for (const photo of photos) expect(photo).toHaveAttribute("src", "blob:preview");
+    const request = photoFetch.mock.calls[0]?.[0] as Request;
+    expect(new URL(request.url).pathname + new URL(request.url).search).toBe("/api/v1/me/photo?v=v1");
+    expect(request.headers.get(SERVER_CODE_HEADER)).toBe(TEST_SERVER_KEY);
+  });
+
+  it("keeps the initials when the photo download is refused", async () => {
+    photoFetch.mockImplementation(async () => new Response(null, { status: 404 }));
+    open({}, "v1");
+    await screen.findByRole("button", { name: "Trocar foto" });
+    await waitFor(() => expect(photoFetch).toHaveBeenCalled());
+    expect(screen.queryByTestId("avatar-photo")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("img", { name: "Ana Souza" }).length).toBeGreaterThan(0);
   });
 
   it("falls back to the initial when the photo fails to load", async () => {
@@ -81,7 +100,8 @@ describe("Foto de perfil", () => {
     expect(callsTo(calls, "PUT", "/me/photo")[0]?.body).toEqual({ contentType: "image/jpeg", dataBase64: "QUJD" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Nova foto de perfil" })).not.toBeInTheDocument());
     const photos = await screen.findAllByTestId("avatar-photo");
-    for (const photo of photos) expect(photo).toHaveAttribute("src", "/api/v1/me/photo?v=v2");
+    for (const photo of photos) expect(photo).toHaveAttribute("src", "blob:preview");
+    expect(photoFetch.mock.calls.map((call) => new URL((call[0] as Request).url).search)).toContain("?v=v2");
   });
 
   it.each([
@@ -97,7 +117,7 @@ describe("Foto de perfil", () => {
     const dialog = await screen.findByRole("dialog", { name: "Nova foto de perfil" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Usar esta foto" }));
     expect(await within(dialog).findByText(message)).toBeInTheDocument();
-    for (const photo of screen.getAllByTestId("avatar-photo")) expect(photo).toHaveAttribute("src", "/api/v1/me/photo?v=v1");
+    for (const photo of await screen.findAllByTestId("avatar-photo")) expect(photo).toHaveAttribute("src", "blob:preview");
   });
 
   it.each([

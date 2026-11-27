@@ -15,7 +15,7 @@ export function parseMaxDays(raw: string): number | null {
   return value >= 1 && value <= 60 ? value : null;
 }
 
-export function ForceSettingsPage() {
+export function ForceSettingsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const api = useApi();
   const query = useQuery(forceSettingsQueryOptions(api));
   const tables = useQuery(customerPriceTablesQueryOptions(api));
@@ -23,7 +23,7 @@ export function ForceSettingsPage() {
   if (query.isPending) {
     return (
       <>
-        <PageHeader title="Parâmetros" />
+        {embedded ? null : <PageHeader title="Parâmetros" />}
         <div aria-busy="true">
           <SkeletonLines lines={4} label="Carregando parâmetros…" />
         </div>
@@ -33,17 +33,17 @@ export function ForceSettingsPage() {
   if (query.isError) {
     return (
       <>
-        <PageHeader title="Parâmetros" />
+        {embedded ? null : <PageHeader title="Parâmetros" />}
         <Card>
           <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} title="Não foi possível carregar os parâmetros" />
         </Card>
       </>
     );
   }
-  return <SettingsForm key={query.data.updatedAt} data={query.data} tables={tables.data?.items ?? []} tablesLoading={tables.isPending} />;
+  return <SettingsForm embedded={embedded} key={query.data.updatedAt} data={query.data} tables={tables.data?.items ?? []} tablesLoading={tables.isPending} />;
 }
 
-function SettingsForm({ data, tables, tablesLoading }: { data: { maxDaysWithoutSync: number; defaultPriceTableCode: number }; tables: { code: number; name: string }[]; tablesLoading: boolean }) {
+function SettingsForm({ data, tables, tablesLoading, embedded }: { embedded: boolean; data: { maxDaysWithoutSync: number; defaultPriceTableCode: number }; tables: { code: number; name: string }[]; tablesLoading: boolean }) {
   const api = useApi();
   const queryClient = useQueryClient();
   const [days, setDays] = useState(String(data.maxDaysWithoutSync));
@@ -71,7 +71,7 @@ function SettingsForm({ data, tables, tablesLoading }: { data: { maxDaysWithoutS
 
   return (
     <>
-      <PageHeader title="Parâmetros" />
+      {embedded ? null : <PageHeader title="Parâmetros" />}
       <div className="flex max-w-2xl flex-col gap-3">
         <Card>
           <CardBody>

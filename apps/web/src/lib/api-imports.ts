@@ -1,5 +1,5 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
-import { ApiRequestError, API_BASE_PATH, callApi, toApiRequestError, type ApiClient } from "./api";
+import { ApiRequestError, API_BASE_PATH, callApi, fetchWithServerCode, toApiRequestError, type ApiClient } from "./api";
 
 /** Spreadsheet import (RF-IMP) and CSV/XLSX export (RF-DSH-6). The server is the only judge of what a file means and who may export. */
 
@@ -58,7 +58,7 @@ export async function downloadFile(path: string, query: Record<string, string | 
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
   let response: Response;
   try {
-    response = await globalThis.fetch(`${API_BASE_PATH}${path}${suffix}`, { credentials: "same-origin" });
+    response = await fetchWithServerCode(new Request(`${window.location.origin}${API_BASE_PATH}${path}${suffix}`, { credentials: "same-origin" }));
   } catch {
     throw new ApiRequestError({ status: 0, message: "Sem conexão com o servidor." });
   }

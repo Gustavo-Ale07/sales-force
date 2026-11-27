@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { TaskSchema, TasksResponseSchema, NotificationsResponseSchema } from '@salesforce/contracts';
-import { activityTask, device, notification, pushDevice, salesOrder } from '@salesforce/db';
+import { activityTask, notification, pushDevice, salesOrder } from '@salesforce/db';
 import { DEMO_ACCOUNT_EMAILS, getDemoDataset } from '@salesforce/sankhya';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -36,11 +36,6 @@ beforeAll(async () => {
   const own = (seller: number) => dataset.customers.find((c) => c.sellerCode === seller && c.active && !c.blocked);
   customer1 = own(103)!.code;
   customer2 = own(107)!.code;
-  // Push goes only to accounts with an approved device.
-  const at = new Date();
-  for (const who of ['seller1', 'seller2'] as const) {
-    await db().insert(device).values({ id: randomUUID(), accountId: idOf(who), installId: `install-${who}-0001`, label: 'Teste', platform: 'android', status: 'approved', createdAt: at, lastSeenAt: at });
-  }
 });
 
 afterAll(async () => {
@@ -168,24 +163,6 @@ describe('notifications', () => {
     await sweepOf(sender).run();
     const [device] = await db().select().from(pushDevice).where(eq(pushDevice.token, token));
     expect(device?.disabledAt).not.toBeNull();
-  });
-
-  it('sends no push to an account without an approved device, and revoking the device switches its tokens off', async () => {
-    const sender = new FakeSender();
-    const token = 'ExponentPushToken[revokedtoken001]';
-    await ctx.call('manager', 'PUT', '/push-devices', { token, platform: 'android' });
-    const title = 'Sem aparelho aprovado';
-    await ctx.call('manager', 'POST', '/tasks', taskBody({ title, dueAt: new Date(ctx.clock.fn().getTime() + 5 * 60_000).toISOString(), reminderLeadMinutes: 15 }));
-    await sweepOf(sender).run();
-    expect(sender.sent.filter((m) => m.to === token)).toHaveLength(0);
-
-    const at = new Date();
-    const deviceId = randomUUID();
-    await db().insert(device).values({ id: deviceId, accountId: idOf('manager'), installId: 'install-manager-0001', label: 'Teste', platform: 'android', status: 'approved', createdAt: at, lastSeenAt: at });
-    const revoked = await ctx.call('admin', 'POST', `/devices/${deviceId}/revoke`);
-    expect(revoked.status).toBe(200);
-    const [row] = await db().select().from(pushDevice).where(eq(pushDevice.token, token));
-    expect(row?.disabledAt).not.toBeNull();
   });
 
   it('re-registering a token moves it to the new account and unregistering is idempotent', async () => {

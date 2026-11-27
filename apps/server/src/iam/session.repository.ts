@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { account, device, session, type AccountRole, type AccountStatus, type Database } from '@salesforce/db';
+import { account, session, type AccountRole, type AccountStatus, type Database } from '@salesforce/db';
 import { and, eq, isNull, lt, or } from 'drizzle-orm';
 import { DATABASE } from '../platform/tokens.js';
 import type { AuditWriter } from './audit.service.js';
@@ -20,10 +20,6 @@ export interface SessionWithAccount {
   readonly external: boolean;
   /** The stable directory id behind `external` (null for local accounts). Opaque code, not a secret. */
   readonly externalUserId: string | null;
-  /** The mobile device the session was opened from; null for the site and for sessions that predate the registry. */
-  readonly deviceId: string | null;
-  /** Current status of that device, read on every request (AUTH-1); null without a device. */
-  readonly deviceStatus: 'pending' | 'approved' | 'revoked' | null;
 }
 
 /** Sessions that ended this long ago are deleted by the opportunistic purge. */
@@ -40,7 +36,6 @@ export class SessionRepository {
     tokenHash: string;
     createdAt: Date;
     expiresAt: Date;
-    deviceId?: string | null;
   }): Promise<void> {
     await this.db.insert(session).values({
       id: values.id,
@@ -49,7 +44,6 @@ export class SessionRepository {
       createdAt: values.createdAt,
       lastSeenAt: values.createdAt,
       expiresAt: values.expiresAt,
-      deviceId: values.deviceId ?? null,
     });
   }
 
@@ -69,7 +63,6 @@ export class SessionRepository {
         createdAt: values.createdAt,
         lastSeenAt: values.createdAt,
         expiresAt: values.expiresAt,
-        deviceId: values.deviceId ?? null,
       });
       await writeAudit(tx);
     });
@@ -90,16 +83,13 @@ export class SessionRepository {
         role: account.role,
         status: account.status,
         externalUserId: account.externalUserId,
-        deviceId: session.deviceId,
-        deviceStatus: device.status,
       })
       .from(session)
       .innerJoin(account, eq(account.id, session.accountId))
-      .leftJoin(device, eq(device.id, session.deviceId))
       .where(eq(session.tokenHash, tokenHash));
     if (row === undefined) return null;
     const { externalUserId, ...rest } = row;
-    return { ...rest, externalUserId, role: rest.role as AccountRole, status: rest.status as AccountStatus, deviceStatus: rest.deviceStatus as SessionWithAccount['deviceStatus'], external: externalUserId !== null };
+    return { ...rest, externalUserId, role: rest.role as AccountRole, status: rest.status as AccountStatus, external: externalUserId !== null };
   }
 
   async touch(sessionId: string, lastSeenAt: Date, expiresAt: Date): Promise<void> {
@@ -126,6 +116,12 @@ export class SessionRepository {
       .set({ revokedAt: now })
       .where(and(eq(session.accountId, accountId), isNull(session.revokedAt)))
       .returning({ id: session.id });
+    return revoked.length;
+  }
+
+  /** Revokes every live session of the installation (server code rotation). */
+  async revokeAll(now: Date, writer: Pick<Database, 'update'> = this.db): Promise<number> {
+    const revoked = await writer.update(session).set({ revokedAt: now }).where(isNull(session.revokedAt)).returning({ id: session.id });
     return revoked.length;
   }
 

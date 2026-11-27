@@ -1,5 +1,5 @@
 import { createApiClient, type ApiClient } from "@salesforce/contracts/client";
-import { notifyDeviceRevoked } from "../device/revocation";
+import { withServerCodeRequest } from "../server/server-connection";
 
 export type { ApiClient };
 
@@ -22,7 +22,8 @@ export function createMobileApiClient(baseUrl: string, options: MobileApiClientO
     credentials: "include",
     headers: { Accept: "application/json" },
     // Resolve the global lazily so test stubs installed after import are honoured.
-    fetch: options.fetch ?? ((request: Request) => globalThis.fetch(request)),
+    // Every request carries the server code's key (`X-Server-Code`); a guard 401 sends the app back to "Adicionar servidor".
+    fetch: withServerCodeRequest(options.fetch ?? ((request: Request) => globalThis.fetch(request))),
   });
 }
 
@@ -118,8 +119,6 @@ export async function callApi<T>(call: () => Promise<ClientResult<T>>): Promise<
     });
     const rawFields = record(details?.fields);
     const fields = Object.fromEntries(Object.entries(rawFields ?? {}).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
-    // AUTH-1/AUTH-2: a revoked installation is told on every request; the shell wipes the local database on this signal.
-    if (result.response.status === 401 && envelope?.code === "device_revoked") notifyDeviceRevoked();
     throw new ApiRequestError({
       status: result.response.status,
       fields,

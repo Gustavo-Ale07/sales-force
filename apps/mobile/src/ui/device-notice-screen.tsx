@@ -2,7 +2,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { colors, spacing } from "../theme";
 import { useInsets } from "./use-insets";
 
-export type DeviceNoticeKind = "pending" | "locked" | "revoked" | "key_lost";
+export type DeviceNoticeKind = "locked" | "key_lost";
 
 interface Notice {
   readonly title: string;
@@ -10,21 +10,11 @@ interface Notice {
   readonly action: string;
 }
 
-/** Texts of M-02 (aguardando aprovação), M-18 (bloqueio por dias sem sincronizar), M-19 (aparelho revogado) and the lost local key. */
+/** Texts of M-18 (bloqueio por dias sem sincronizar), and the lost local key. */
 export const DEVICE_NOTICES: Record<DeviceNoticeKind, Notice> = {
-  pending: {
-    title: "Aguardando aprovação",
-    message: "Este aparelho precisa ser aprovado por um administrador ou gerente. Esta tela atualiza sozinha.",
-    action: "Sair",
-  },
   locked: {
     title: "Conecte-se para continuar",
     message: "Este aparelho ficou dias demais sem sincronizar. Conecte-se à internet e entre de novo.",
-    action: "Entrar",
-  },
-  revoked: {
-    title: "Aparelho revogado",
-    message: "Os dados salvos neste aparelho foram apagados. Peça a um administrador ou gerente para liberar o acesso.",
     action: "Entrar",
   },
   key_lost: {

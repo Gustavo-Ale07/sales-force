@@ -19,6 +19,7 @@ import {
   productsPage,
 } from "../test/fixtures";
 import { apiError, callsTo, fillOrderHeader, renderApp, type Handlers } from "../test/harness";
+import { stubGuardedImages } from "../test/images";
 import { SUBMIT_AWAITING_MESSAGE, SUBMIT_BLOCKED_MESSAGE, SUBMIT_DISABLED_MESSAGE } from "./order-editor";
 
 const FORBIDDEN_TERMS = /custo|margem|cost|margin/i;
@@ -63,6 +64,7 @@ describe("Novo pedido", () => {
   });
 
   it("the product picker requests thumbnails with the version, and a placeholder without image", async () => {
+    const { requested } = stubGuardedImages();
     const image = { version: "h2", thumbnailUrl: "/api/v1/products/2001/image?variant=thumb", url: "/api/v1/products/2001/image?variant=full" };
     const { user } = renderApp("/pedidos/novo?customer=1001", {
       handlers: newOrderHandlers({
@@ -77,8 +79,8 @@ describe("Novo pedido", () => {
     const produtos = await screen.findByRole("button", { name: "Produtos" });
     if (produtos.getAttribute("aria-pressed") !== "true") await user.click(produtos);
     await screen.findByText("Vela lisa");
-    const img = document.querySelector('img[src*="products/2001/image"]');
-    expect(img).toHaveAttribute("src", "/api/v1/products/2001/image?variant=thumb&v=h2");
+    await waitFor(() => expect(document.querySelector('img[src^="blob:"]')).not.toBeNull());
+    expect(requested()).toContain("/api/v1/products/2001/image?variant=thumb&v=h2");
     const row = screen.getByText("Vela lisa").closest("tr") as HTMLElement;
     expect(within(row).queryByRole("img")).toBeNull();
     expect(within(row).getByText("VL")).toBeInTheDocument();

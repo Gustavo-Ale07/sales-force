@@ -15,7 +15,7 @@ import { authorizeRoute } from '../../src/iam/policy.js';
 import { createLogger } from '../../src/observability/logger.js';
 import { recordWorkerHeartbeat } from '../../src/platform/worker-heartbeat.js';
 import { createTestAccount, TEST_PASSWORD, TestClock, testAuthConfig } from '../helpers/auth.js';
-import { loginCookie } from '../helpers/auth-app.js';
+import { loginCookie, seedServerCode, sendServerCodeByDefault } from '../helpers/auth-app.js';
 import {
   captureLogs,
   createMigratedDatabase,
@@ -44,6 +44,8 @@ async function apiOver(database: MigratedDatabase, options: { level?: string; re
     ...(options.readinessCacheTtlMs === undefined ? {} : { readinessCacheTtlMs: options.readinessCacheTtlMs }),
     ...(options.clock === undefined ? {} : { clock: options.clock }),
   });
+  sendServerCodeByDefault(app);
+  await seedServerCode(database);
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   opened.push(() => app.close());

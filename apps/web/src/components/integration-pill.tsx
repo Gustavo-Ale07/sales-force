@@ -34,8 +34,8 @@ export function IntegrationPill({ state = "unknown", detail, syncing = false }: 
       {/* Focusable so keyboard users can reach the explanatory tooltip (WCAG 1.4.13). */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
       <span tabIndex={0} data-syncing={syncing || undefined} className="inline-flex rounded-full data-[syncing=true]:animate-sf-breathe">
-        {/* Phones keep only the dot (the text stays in the DOM for screen readers) so the top bar never overflows. */}
-        <StatusBadge tone={tone} className="max-md:size-8 max-md:justify-center max-md:gap-0 max-md:p-0 max-md:text-[0px]">
+        {/* Below 2xl the pill keeps only the dot (the text stays in the DOM for screen readers) so the top bar never overflows. */}
+        <StatusBadge tone={tone} className="whitespace-nowrap max-2xl:size-8 max-2xl:justify-center max-2xl:gap-0 max-2xl:p-0 max-2xl:text-[0px]">
           {label}
         </StatusBadge>
       </span>

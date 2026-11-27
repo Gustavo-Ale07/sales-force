@@ -10,10 +10,12 @@ import { AccountRepository } from './account.repository.js';
 import { AccountService } from './account.service.js';
 import { AuditService } from './audit.service.js';
 import { AuthController } from './auth.controller.js';
-import { DeviceController } from './device.controller.js';
-import { DeviceRepository } from './device.repository.js';
+import { AppConfigService } from './app-config.service.js';
+import { ServerCodeController } from './server-code.controller.js';
+import { ServerCodeGuard } from './server-code.guard.js';
+import { ServerCodeRepository } from './server-code.repository.js';
+import { ServerCodeService } from './server-code.service.js';
 import { ForceConfigRepository } from '../force-config/force-config.repository.js';
-import { DeviceService } from './device.service.js';
 import { AuthService } from './auth.service.js';
 import { assertSafeAuthConfig, type AuthConfig } from './auth-config.js';
 import { DrizzleExternalAccountLinks } from './drizzle-external-account-links.js';
@@ -51,7 +53,7 @@ export class IamModule {
     return {
       module: IamModule,
       imports: [ConfigurationModule, MirrorModule],
-      controllers: [AuthController, AccountPhotoController, DeviceController],
+      controllers: [AuthController, AccountPhotoController, ServerCodeController],
       providers: [
         { provide: AUTH_CONFIG, useValue: config },
         { provide: PASSWORD_HASHER, useValue: new Argon2idPasswordHasher(config.passwordHash) },
@@ -59,19 +61,21 @@ export class IamModule {
         AccountPhotoRepository,
         AccountPhotoService,
         SessionRepository,
-        DeviceRepository,
+        ServerCodeRepository,
+        ServerCodeService,
         ForceConfigRepository,
-        DeviceService,
+        AppConfigService,
         ThrottleRepository,
         AuditService,
         AuthService,
         AccountService,
         PolicyService,
         ...externalProviders,
-        // Global default-deny guard: every handler of the process passes through it.
+        // Global guards, in this order: the server code first (before any auth logic), then the default-deny access guard.
+        { provide: APP_GUARD, useClass: ServerCodeGuard },
         { provide: APP_GUARD, useClass: AccessGuard },
       ],
-      exports: [AuthService, AccountService, PolicyService, AuditService, DeviceService],
+      exports: [AuthService, AccountService, PolicyService, AuditService, ServerCodeService],
     };
   }
 }

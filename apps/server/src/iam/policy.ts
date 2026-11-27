@@ -47,16 +47,8 @@ const SYNC_REFRESH_ROLES: readonly AccountRole[] = [...COMMERCIAL_ROLES, 'techni
 export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // Any authenticated account may end its own session.
   logout: { roles: ACCOUNT_ROLES },
-  // AUTH-2 / W-36: an app device reads its own status and reports its sync (every profile with the mobile channel; the channel rule
-  // keeps technical/operations out). Approval and revocation: admin, and the manager for the team (scoped in DeviceService).
-  getMyDevice: { roles: ACCOUNT_ROLES },
-  reportDeviceSync: { roles: ACCOUNT_ROLES },
-  listDevices: { roles: ['admin', 'manager'] },
-  approveDevice: { roles: ['admin', 'manager'] },
-  revokeDevice: { roles: ['admin', 'manager'] },
-  // RF-IAM-8: offline limit and devices per account, edited in Configuracoes: admin only.
-  getDeviceSettings: { roles: ['admin'] },
-  updateDeviceSettings: { roles: ['admin'] },
+  // App parameters of the Force configuration (days without sync, default price table): every profile that can sign in.
+  getAppConfig: { roles: ACCOUNT_ROLES },
   // Own profile photo only (the routes name no account): every profile that can sign in, `technical` and `operations` included.
   putProfilePhoto: { roles: ACCOUNT_ROLES },
   deleteProfilePhoto: { roles: ACCOUNT_ROLES },

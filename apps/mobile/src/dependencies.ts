@@ -1,8 +1,5 @@
 import { createPushPort, type PushPort } from "./push/push-registration";
-import { Platform } from "react-native";
 import { createHttpAuth } from "./auth/http-auth";
-import { createDevicePort, type DevicePort } from "./device/device-port";
-import { createSecureInstallIdStore } from "./device/secure-install-id";
 import type { AuthPort } from "./auth/auth-port";
 import { createDeviceConnectivity, type ConnectivityPort, type ConnectivityState } from "./connectivity/connectivity";
 import { createMobileApiClient } from "./data/api";
@@ -23,6 +20,7 @@ import { createProfilePhotoStore } from "./photo/profile-photo-store";
 import { createProfilePhotoApi, createProfilePhotoService, type ProfilePhotoService } from "./photo/profile-photo";
 import { detectPhotoPicker } from "./photo/photo-picker";
 import type { SqlDatabase } from "@salesforce/mobile-db";
+import { serverCodeHeaders } from "./server/server-connection";
 
 /** Everything the screens talk to. Each piece is a port, so tests and the future offline adapters plug in here. */
 export interface AppDependencies {
@@ -47,12 +45,11 @@ export interface AppDependencies {
   readonly imports?: ImportsPort;
   /** The device's file chooser for the import. Absent in test setups. */
   readonly importFile?: ImportFilePort;
-  /** This installation's registry entry on the server (AUTH-2): approval state, last sync report, identity reset. Absent in test setups. */
-  readonly device?: DevicePort;
 }
 
 /** Production composition: online adapters over the API at `baseUrl` (already including the API base path). */
 export function createAppDependencies(baseUrl: string, db: SqlDatabase): AppDependencies {
+  let offlineServices: OfflineServices | undefined;
   const api = createMobileApiClient(baseUrl);
   const remote = createRemoteRepositories(api);
   const connectivity = createDeviceConnectivity();
@@ -64,7 +61,6 @@ export function createAppDependencies(baseUrl: string, db: SqlDatabase): AppDepe
   connectivity.subscribe((state) => {
     internet = state;
   });
-  const device = createDevicePort(api, createSecureInstallIdStore(), () => ({ label: Platform.OS === "ios" ? "iPhone ou iPad" : "Android", platform: Platform.OS === "ios" ? "ios" : "android" }));
   const photoApi = createProfilePhotoApi(api);
   const profilePhoto = createProfilePhotoService({
     api: photoApi,
@@ -79,12 +75,15 @@ export function createAppDependencies(baseUrl: string, db: SqlDatabase): AppDepe
     push: createPushPort(api),
     imports: createImportsPort(api),
     importFile: createExpoImportFile(),
-    device,
-    auth: createHttpAuth(api, () => device.registration()),
+    auth: createHttpAuth(api, (config) => {
+      // App parameters of the Force configuration: kept for the next offline start.
+      void offlineServices?.session.rememberOfflineMaxDays(config.offlineMaxDays).catch(() => undefined);
+      if (config.defaultPriceTableCode !== undefined) void offlineServices?.session.rememberDefaultPriceTable?.(config.defaultPriceTableCode).catch(() => undefined);
+    }),
     repositories: remote,
     connectivity,
     orderPdf: createExpoOrderPdf(),
-    offline: createOfflineServices({
+    offline: (offlineServices = createOfflineServices({
       db,
       api,
       remote,
@@ -94,7 +93,8 @@ export function createAppDependencies(baseUrl: string, db: SqlDatabase): AppDepe
       // No logger exists in the app yet: the line carries counts and hashes only, never records.
       onMirrorMismatch: (message) => console.warn(message),
       // `expo/fetch` streams the response body (the global fetch of React Native does not).
-      fetchStream: (url, init) => expoFetch(url, init) as unknown as ReturnType<StreamFetch>,
-    }),
+      // The stream carries the server code's key too (a guard 401 is caught by the ordinary API calls).
+      fetchStream: (url, init) => expoFetch(url, { ...init, headers: { ...init.headers, ...serverCodeHeaders() } }) as unknown as ReturnType<StreamFetch>,
+    })),
   };
 }

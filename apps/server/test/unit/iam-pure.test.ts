@@ -154,7 +154,7 @@ describe('central policy', () => {
       .filter(([, policy]) => policy.roles.includes('operations'))
       .map(([operationId]) => operationId)
       .sort();
-    expect(granted).toEqual(['deleteProfilePhoto', 'getMyDevice', 'getProfilePhoto', 'getReleaseQueueCount', 'getSyncRefresh', 'listReleaseQueue', 'logout', 'putProfilePhoto', 'reportDeviceSync', 'startSyncRefresh']);
+    expect(granted).toEqual(['deleteProfilePhoto', 'getAppConfig', 'getProfilePhoto', 'getReleaseQueueCount', 'getSyncRefresh', 'listReleaseQueue', 'logout', 'putProfilePhoto', 'startSyncRefresh']);
   });
 
   it('a seller is never granted the release queue (owner ruling 2026-11-23)', () => {

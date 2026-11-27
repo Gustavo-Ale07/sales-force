@@ -31,6 +31,8 @@ export interface AuthConfig {
   readonly secureCookies: boolean;
   /** Origins allowed to send state-changing requests (CSRF Origin check). */
   readonly allowedOrigins: readonly string[];
+  /** Public API origin put in the server code (`SF_PUBLIC_API_URL`); undefined = the code cannot be generated here. */
+  readonly publicApiUrl?: string;
   /** Idle expiry, slid by activity. */
   readonly sessionIdleMs: number;
   /** Absolute lifetime cap. */
@@ -178,6 +180,7 @@ function baseAuthConfig(env: ParsedApiEnv): AuthConfig {
     ...(env.AUTH_MODE !== 'dev' ? { allowedRoles: LOCAL_MODE_ROLES } : {}),
     secureCookies: env.NODE_ENV !== 'development',
     allowedOrigins: env.allowedOrigins,
+    ...(env.SF_PUBLIC_API_URL === undefined || env.SF_PUBLIC_API_URL === '' ? {} : { publicApiUrl: env.SF_PUBLIC_API_URL }),
     sessionIdleMs: env.SESSION_IDLE_TIMEOUT_MINUTES * MINUTE_MS,
     sessionAbsoluteMs: env.SESSION_ABSOLUTE_TIMEOUT_HOURS * HOUR_MS,
     sessionTouchIntervalMs: MINUTE_MS,

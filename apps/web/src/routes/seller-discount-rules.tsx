@@ -54,7 +54,7 @@ function failureOf(error: unknown, fallback: string) {
   return describeApiError(error, fallback);
 }
 
-export function SellerDiscountRulesPage() {
+export function SellerDiscountRulesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const api = useApi();
   const sellers = useQuery(sellersQueryOptions(api));
   const [sellerFilter, setSellerFilter] = useState("");
@@ -62,16 +62,19 @@ export function SellerDiscountRulesPage() {
   const query = useQuery(sellerDiscountRulesQueryOptions(api, sellerFilter === "" ? undefined : Number(sellerFilter)));
   const sellerList = sellers.data?.items ?? [];
 
+  const newRuleButton = (
+    <Button variant="primary" leftIcon={<Plus size={15} strokeWidth={1.75} aria-hidden="true" />} onClick={() => setDialogue({ kind: "create" })}>
+      Nova regra
+    </Button>
+  );
+
   return (
     <>
-      <PageHeader
-        title="Descontos por representante"
-        actions={
-          <Button variant="primary" leftIcon={<Plus size={15} strokeWidth={1.75} aria-hidden="true" />} onClick={() => setDialogue({ kind: "create" })}>
-            Nova regra
-          </Button>
-        }
-      />
+      {embedded ? (
+        <div className="flex justify-end">{newRuleButton}</div>
+      ) : (
+        <PageHeader title="Descontos por representante" actions={newRuleButton} />
+      )}
       <div className="mb-3 max-w-sm">
         <FormField label="Representante">
           <Select size="md" value={sellerFilter} onChange={(event) => setSellerFilter(event.target.value)}>

@@ -1,12 +1,14 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { noPriceList, product, productsPage } from "../test/fixtures";
 import { callsTo, renderApp } from "../test/harness";
+import { stubGuardedImages } from "../test/images";
 
 const groups = { "GET /product-groups": { body: { items: [{ code: 30, name: "Balões", parentCode: null, degree: 1, hasChildren: false }], hierarchical: true, hasUngrouped: false } } };
 
 describe("Catálogo: modo grade de fotos", () => {
   it("starts as a table and toggles to a photo grid with the same data, no cost or margin", async () => {
+    const { requested } = stubGuardedImages();
     const image = { version: "h1", thumbnailUrl: "/api/v1/products/2001/image?variant=thumb", url: "/api/v1/products/2001/image?variant=full" };
     const { user } = renderApp("/produtos", {
       handlers: { ...groups, "GET /products": { body: productsPage([product({ image }), product({ code: 2002, description: "Vela lisa", listPrice: noPriceList("no_price_row") })]) } },
@@ -20,7 +22,9 @@ describe("Catálogo: modo grade de fotos", () => {
     const grid = screen.getByRole("list", { name: "Produtos em grade" });
     expect(screen.queryByRole("table")).toBeNull();
     expect(within(grid).getAllByRole("listitem")).toHaveLength(2);
-    expect(grid.querySelector("img")).toHaveAttribute("src", "/api/v1/products/2001/image?variant=thumb&v=h1");
+    await waitFor(() => expect(grid.querySelector("img")).not.toBeNull());
+    expect(grid.querySelector("img")).toHaveAttribute("src", expect.stringMatching(/^blob:/));
+    expect(requested()).toContain("/api/v1/products/2001/image?variant=thumb&v=h1");
     expect(grid.querySelector("img")).toHaveAttribute("alt", "");
     expect(within(grid).getAllByText("Balão látex 9 pol. vermelho")).toHaveLength(1);
     expect(within(grid).queryByText("Vendável")).toBeNull();

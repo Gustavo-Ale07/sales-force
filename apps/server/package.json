@@ -20,6 +20,8 @@
     "sync:once": "tsx --env-file-if-exists=../../.env src/sync-once.ts",
     "start:sync-once": "node dist/sync-once.js",
     "start:ops-order-resend": "node dist/ops-order-resend.js",
+    "server-code": "tsx --env-file-if-exists=../../.env src/server-code-cli.ts",
+    "start:server-code": "node dist/server-code-cli.js",
     "product-media:bootstrap": "tsx --env-file-if-exists=../../.env src/product-media-bootstrap.ts",
     "start:product-media-bootstrap": "node dist/product-media-bootstrap.js",
     "seed": "tsx --env-file-if-exists=../../.env src/seed.ts",

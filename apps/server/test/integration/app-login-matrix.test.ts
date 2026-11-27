@@ -50,7 +50,7 @@ describe('POST /auth/login with client=app', () => {
     const ctx = await startAuthApp(postgres, opened);
     await createTestAccount(ctx.database.handle, { username: 'adm@example.test', role: 'admin' }, ctx.clock.fn);
     await createTestAccount(ctx.database.handle, { username: 'mgr@example.test', role: 'manager' }, ctx.clock.fn);
-    expect((await login(ctx, 'adm@example.test', TEST_PASSWORD, { client: 'app', remoteAddress: '10.9.2.1', device: { installId: 'install-adm-0001', label: 'Android', platform: 'android' } })).statusCode).toBe(200);
-    expect((await login(ctx, 'mgr@example.test', TEST_PASSWORD, { client: 'app', remoteAddress: '10.9.2.2', device: { installId: 'install-mgr-0001', label: 'Android', platform: 'android' } })).statusCode).toBe(200);
+    expect((await login(ctx, 'adm@example.test', TEST_PASSWORD, { client: 'app', remoteAddress: '10.9.2.1' })).statusCode).toBe(200);
+    expect((await login(ctx, 'mgr@example.test', TEST_PASSWORD, { client: 'app', remoteAddress: '10.9.2.2' })).statusCode).toBe(200);
   });
 });

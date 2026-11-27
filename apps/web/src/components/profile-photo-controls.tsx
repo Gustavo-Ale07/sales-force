@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import { deleteProfilePhoto, putProfilePhoto } from "../lib/api-mutations";
 import { useApi } from "../lib/app-context";
 import { sessionQueryKey, type AuthUser } from "../lib/auth-client";
+import { useGuardedImageSrc } from "../lib/guarded-image";
 import {
   PHOTO_ACCEPT,
   photoMessages,
@@ -94,12 +95,13 @@ export function ProfilePhotoControls({ user, prepare = prepareSquarePhoto }: Pro
     upload.reset();
   };
 
+  const photoSrc = useGuardedImageSrc(photoUrl(user.photoVersion));
   const displayName = titleCase(user.name);
   const hasPhoto = Boolean(user.photoVersion);
 
   return (
     <div className="flex items-center gap-4">
-      <Avatar name={displayName} seed={user.id} size="xl" src={photoUrl(user.photoVersion)} />
+      <Avatar name={displayName} seed={user.id} size="xl" src={photoSrc} />
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <input
